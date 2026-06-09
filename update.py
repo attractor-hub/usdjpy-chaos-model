@@ -391,7 +391,7 @@ tr:hover td{{background:var(--bg3)}}
 <div class="upd">自動更新: 毎週月〜金 日本時間 翌1時 | GitHub Actions + yfinance</div>
 </div>
 <script>
-const D={payload_json};
+const D={{payload_json}};
 const RL=['低ボラ安定レジーム','中ボラ レジーム','高ボラ 不安定レジーム'];
 const RC=['r0','r1','r2'];
 const RCOL=['#3ddc84','#f0a830','#ff6b6b'];
