@@ -176,19 +176,9 @@ def backtest_optimize(prices, momentum, regimes, n_bt=150):
         if idx < offset + 50:
             continue
 
-        # カオス
-        pn = (prices[:idx]   - p_mean) / p_std
-        mn = (momentum[:idx] - m_mean) / m_std
-        Xe = embed(pn, mn)
-        Xo = prices[offset:idx]
-        Xr = regimes[offset:idx]
-        cur_r = int(regimes[idx-1])
-        dists = np.linalg.norm(Xe[:-1] - Xe[-1], axis=1)
-        pen   = np.where(Xr[:-1] == cur_r, 1.0, 2.0)
-        adj   = dists * pen
-        adj[-20:] = np.inf
-        nn = [j for j in np.argsort(adj)[:15] if j+1 < len(Xo)][:7]
-        cp = float(np.mean([Xo[j+1] for j in nn])) if nn else prices[idx-1]
+        # カオス (修正箇所: predict_chaos から辞書ではなく数値を正しく取得)
+        cp_dict = predict_chaos(prices[:idx], momentum[:idx], regimes[:idx], steps=1)
+        cp = cp_dict[0]["mean"] if cp_dict else prices[idx-1]
 
         # AR
         ap = predict_ar(prices[:idx], steps=1)[0]
@@ -517,7 +507,7 @@ new Chart(document.getElementById('c2'),{{
   options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},
     scales:{{
       x:{{grid:{{color:'rgba(42,48,69,.5)'}},ticks:{{color:'#6a7090',maxTicksLimit:10,maxRotation:45}}}},
-      y:{{grid:{{color:'rgba(42,48,69,.5)'}},ticks:{{color:'#4a9eff',callback:v=>'¥'+v}},position:'left'}},
+      y:{{grid:{{color:'rgba(42,48,69,.5)'}},ticks:{{color:'#4a9eff',callback:v=>'¥'+vType}},position:'left'}},
       y2:{{grid:{{display:false}},ticks:{{color:'#f0a830',callback:v=>v+'%'}},position:'right',min:0}}
     }}
   }}
@@ -579,15 +569,17 @@ def main():
     chaos_preds = predict_chaos(prices, momentum, regimes)
     ar_preds    = predict_ar(prices)
     mom_preds   = predict_momentum(prices)
-    ens_preds   = ensemble_predict(chaos_preds, ar_preds, mom_preds, weights, current_regime)
+    ens_preds = ensemble_predict(chaos_preds, ar_preds, mom_preds, weights, current_regime)
 
-    # 残差（直近60日）
+    # 残差（直近60日） (修正箇所: predict_chaos から数値を正しく取得)
     errors_ens_60 = []
     for i in range(60, 0, -1):
         idx = N - i
         if idx < (DIM-1)*TAU + 50:
             continue
-        cp = predict_chaos(prices[:idx], momentum[:idx], regimes[:idx], steps=1)[0]["mean"]
+        cp_dict = predict_chaos(prices[:idx], momentum[:idx], regimes[:idx], steps=1)
+        cp = cp_dict[0]["mean"] if cp_dict else prices[idx-1]
+        
         ap = predict_ar(prices[:idx], steps=1)[0]
         mp = predict_momentum(prices[:idx], steps=1)[0]
         ens_e = weights["chaos"]*cp + weights["ar"]*ap + weights["momentum"]*mp
@@ -595,13 +587,13 @@ def main():
 
     # レジーム履歴（直近60日）
     regime_history = [
-        {{"date": dates[i], "price": float(prices[i]),
-          "regime": int(regimes[i]), "vol": float(roll_vol[i])}}
+        {"date": dates[i], "price": float(prices[i]),
+          "regime": int(regimes[i]), "vol": float(roll_vol[i])}
         for i in range(N-60, N)
     ]
 
     # ペイロード組み立て
-    payload = {{
+    payload = {
         "last_price":     float(prices[-1]),
         "last_date":      dates[-1],
         "current_regime": current_regime,
@@ -619,7 +611,7 @@ def main():
         "regime_history": regime_history,
         "errors_ens_60":  errors_ens_60,
         "generated_at":   datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }}
+    }
 
     # HTML 生成
     os.makedirs("docs", exist_ok=True)
