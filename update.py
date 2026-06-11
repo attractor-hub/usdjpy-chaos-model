@@ -326,8 +326,8 @@ tr:hover td{{background:var(--bg3)}}
 <div class="wrap">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;flex-wrap:wrap;gap:8px">
   <div>
-    <h1>カオス理論アンサンブル予測モデル</h1>
-    <div class="sub">レジーム検出 + 予測分布 + 自動最適化アンサンブル | データ: {payload['last_date']}</div>
+    <h1>カオス理論アンサンブル予測モデル(デモ)</h1>
+    <div class="sub">レジーム検出 + 予測分布 + 自動最適化アンサンブル　Created by I.SAITO | データ: {payload['last_date']}</div>
   </div>
   <div id="rbadge" class="badge r{payload['current_regime']}"><span class="dot"></span><span id="rlabel"></span></div>
 </div>
