@@ -1,279 +1,493 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Chaos</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>USD/JPY Ensemble v3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d0f14;--bg2:#141720;--bg3:#1c2030;--bg4:#242838;
-  --border:#2a3045;--text:#e8eaf0;--text2:#9aa0b8;--text3:#6a7090;
-  --blue:#4a9eff;--green:#3ddc84;--red:#ff6b6b;--amber:#f0a830;--purple:#a070ff;
-  --green3:#0d4025;--amber3:#503010;--red3:#501818;
-  --green2:#1a8a4a;--amber2:#a87020;--red2:#a83030;
-  --blue2:#1a5fa8;--purple2:#6040c0;
+  --bg:#050810;--bg2:#0d1117;--bg3:#141b27;--bg4:#1c2535;
+  --border:#1e2d45;--border2:#2a3f5f;
+  --text:#cdd9f0;--text2:#8899bb;--text3:#556688;
+  --cyan:#00d4ff;--green:#00ff88;--red:#ff4466;--amber:#ffaa00;
+  --purple:#aa66ff;--blue:#4488ff;
+  --green3:#002211;--green2:#009955;--blue3:#001133;--blue2:#2255bb;
+  --amber3:#221100;--amber2:#996600;--red3:#220011;--red2:#992233;
+  --purple3:#110022;--purple2:#6633bb;
+  --r:6px;
 }
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6}
-.wrap{max-width:1100px;margin:0 auto;padding:20px 16px}
-h1{font-size:19px;font-weight:600;margin-bottom:4px}
-.sub{font-size:12px;color:var(--text3);margin-bottom:20px}
-.badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:16px;font-size:12px;font-weight:600;float:right}
-.r0{background:var(--green3);color:var(--green);border:1px solid var(--green2)}
-.r1{background:var(--amber3);color:var(--amber);border:1px solid var(--amber2)}
-.r2{background:var(--red3);color:var(--red);border:1px solid var(--red2)}
-.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
-.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px}
-.m{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
-.ml{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
-.mv{font-size:22px;font-weight:600;line-height:1.1}
-.ms{font-size:11px;color:var(--text3);margin-top:3px}
-.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto}
-.tab{padding:9px 16px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
-.tab.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:500}
+body{background:var(--bg);color:var(--text);font-family:'SF Mono','Consolas','Courier New',monospace;font-size:13px;line-height:1.5;min-height:100vh}
+.wrap{max-width:1200px;margin:0 auto;padding:16px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border2)}
+.hdr-l h1{font-size:15px;font-weight:400;color:var(--cyan);letter-spacing:2px;text-transform:uppercase}
+.hdr-l .sub{font-size:11px;color:var(--text3);margin-top:4px;letter-spacing:1px}
+.hdr-r{text-align:right;font-size:11px;color:var(--text3)}
+.hdr-price{font-size:28px;font-weight:300;color:var(--cyan);letter-spacing:2px}
+.rbadge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:2px;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:500;border:1px solid;margin-top:6px}
+.r0{background:var(--green3);color:var(--green);border-color:var(--green2)}
+.r1{background:var(--blue3);color:var(--blue);border-color:var(--blue2)}
+.r2{background:var(--amber3);color:var(--amber);border-color:var(--amber2)}
+.r3{background:var(--red3);color:var(--red);border-color:var(--red2)}
+.r4{background:var(--purple3);color:var(--purple);border-color:var(--purple2)}
+.rdot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.mstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
+.mc{background:var(--bg2);padding:12px 14px}
+.mc-l{font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}
+.mc-v{font-size:18px;font-weight:300;letter-spacing:1px}
+.mc-s{font-size:10px;color:var(--text3);margin-top:2px}
+.tabs{display:flex;border-bottom:1px solid var(--border2);margin-bottom:20px;overflow-x:auto}
+.tab{padding:8px 18px;font-size:11px;background:none;border:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;letter-spacing:1px;text-transform:uppercase}
+.tab:hover{color:var(--text2)}
+.tab.on{color:var(--cyan);border-bottom-color:var(--cyan)}
 .pn{display:none}.pn.on{display:block}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
-.ct{font-size:13px;font-weight:500;color:var(--text2);margin-bottom:14px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px}
+.card-t{font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-t::before{content:'';display:inline-block;width:3px;height:12px;background:var(--cyan);border-radius:1px}
 .cw{position:relative;width:100%}
-.h280{height:280px}.h240{height:240px}.h200{height:200px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:8px 10px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)}
-td{padding:9px 10px;border-bottom:1px solid var(--border)}
+.h260{height:260px}.h240{height:240px}.h200{height:200px}.h180{height:180px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.g2{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:7px 10px;font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border2)}
+td{padding:9px 10px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--bg3)}
-.bar-bg{flex:1;height:6px;background:var(--bg4);border-radius:3px;position:relative;min-width:60px}
-.bar-f{position:absolute;top:0;height:6px;border-radius:3px;background:var(--blue2)}
-.bar-m{position:absolute;top:-2px;width:3px;height:10px;border-radius:1px;background:var(--blue)}
-.rb{height:6px;border-radius:3px}
-.info{background:var(--bg3);border-left:3px solid var(--blue2);border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:var(--text3);line-height:1.6;margin-top:12px}
-.info strong{color:var(--text2)}
-.warn{background:var(--amber3);border:1px solid var(--amber2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:16px}
-.upd{font-size:11px;color:var(--text3);text-align:right;margin-top:20px}
-.opt-row{display:grid;grid-template-columns:130px 1fr 90px;gap:10px;align-items:center;margin-bottom:6px}
+.prob-bar{height:4px;border-radius:2px;background:var(--bg4);overflow:hidden;margin-top:4px}
+.rtl{display:flex;gap:2px;height:20px;border-radius:3px;overflow:hidden;margin-bottom:8px}
+.rt-seg{flex:1;cursor:default;transition:opacity .15s}
+.rt-seg:hover{opacity:.7}
+.warn{background:var(--amber3);border:1px solid var(--amber2);border-radius:var(--r);padding:8px 12px;font-size:11px;color:var(--amber);margin-bottom:16px;letter-spacing:.5px}
+.note{font-size:11px;color:var(--text3);margin-top:12px;line-height:1.7}
+.foot{font-size:10px;color:var(--text3);text-align:right;margin-top:20px;letter-spacing:.5px}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);pointer-events:none;z-index:9999}
 </style>
 </head>
 <body>
 <div class="wrap">
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;flex-wrap:wrap;gap:8px">
-  <div>
-    <h1>カオス理論アンサンブル予測モデル(デモ)</h1>
-    <div class="sub">レジーム検出 + 予測分布 + 自動最適化アンサンブル　Created by I.SAITO | データ: 2026/06/12</div>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <h1>USD / JPY &nbsp;&middot;&nbsp; Ensemble v3</h1>
+    <div class="sub">Causal Features &middot; Walk-Forward OOS &middot; Conformal Intervals &middot; vs Random Walk</div>
   </div>
-  <div id="rbadge" class="badge r0"><span class="dot"></span><span id="rlabel"></span></div>
+  <div class="hdr-r">
+    <div class="hdr-price" id="hprice">&mdash;</div>
+    <div id="hdate" style="margin-top:4px;font-size:11px;color:var(--text3)"></div>
+    <div id="rbadge" class="rbadge r0" style="margin-top:6px"><span class="rdot"></span><span id="rlabel"></span></div>
+  </div>
 </div>
-<div class="warn">⚠ 研究・学習目的のモデルです。実際の取引判断には使用しないでください。</div>
-<div class="metrics" id="mg"></div>
+
+<div class="warn">&#9888; RESEARCH PURPOSE ONLY &mdash; NOT FOR ACTUAL TRADING. 全性能指標は完全アウトオブサンプル(walk-forward)です。</div>
+
+<div class="mstrip" id="mstrip"></div>
+
 <div class="tabs">
-  <button class="tab on" onclick="sw(0)">予測分布</button>
-  <button class="tab" onclick="sw(1)">バックテスト</button>
-  <button class="tab" onclick="sw(2)">レジーム履歴</button>
-  <button class="tab" onclick="sw(3)">モデル詳細</button>
+  <button class="tab on" onclick="sw(0)">Forecast</button>
+  <button class="tab" onclick="sw(1)">Regime</button>
+  <button class="tab" onclick="sw(2)">Backtest (OOS)</button>
+  <button class="tab" onclick="sw(3)">PnL</button>
+  <button class="tab" onclick="sw(4)">Optimization</button>
 </div>
+
+<!-- TAB 0: FORECAST -->
 <div class="pn on" id="p0">
   <div class="card">
-    <div class="ct">5日間予測（直近20日 + 予測帯）</div>
-    <div class="cw h280"><canvas id="c0"></canvas></div>
+    <div class="card-t">Price Forecast &mdash; 5-Day Conformal Interval (calibrated on OOS residuals)</div>
+    <div class="cw h260"><canvas id="c0"></canvas></div>
   </div>
-  <div class="card">
-    <div class="ct">日別予測詳細</div>
-    <table id="t0"></table>
+  <div class="g2">
+    <div class="card">
+      <div class="card-t">Daily Forecast Detail</div>
+      <table id="t0"></table>
+      <div class="note">区間はOOS残差の経験分位点で校正。上昇確率もOOS残差分布から算出。</div>
+    </div>
+    <div class="card">
+      <div class="card-t">Regime Transition Probability</div>
+      <div id="tmat"></div>
+      <div style="margin-top:14px">
+        <div class="card-t" style="margin-top:0">Up / Down Probability</div>
+        <div id="updown"></div>
+      </div>
+    </div>
   </div>
-  <div class="info"><strong>読み方</strong>：青帯は80%信頼区間。現レジーム（<span id="rl2"></span>）に応じて帯幅が自動調整されます。</div>
 </div>
+
+<!-- TAB 1: REGIME -->
 <div class="pn" id="p1">
   <div class="card">
-    <div class="ct">直近200日バックテスト（自動最適化重みで計算）</div>
-    <div id="btr"></div>
+    <div class="card-t">Regime Timeline &mdash; Last 60 Days (causal classification)</div>
+    <div class="rtl" id="rtl"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:10px;color:var(--text3);margin-top:6px" id="rlegend"></div>
   </div>
   <div class="card">
-    <div class="ct">残差時系列（直近60日）</div>
-    <div class="cw h240"><canvas id="c1"></canvas></div>
-    <div class="info"><strong>自動重み最適化</strong>：毎日バックテストを実行し、3モデルの重みをRMSE最小化グリッドサーチで自動更新します。市場環境の変化（レジーム遷移）に追従して重みが変わります。</div>
+    <div class="card-t">Price &middot; Volatility &middot; ADX</div>
+    <div class="cw h260"><canvas id="c1"></canvas></div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-t">Hurst Exponent (last 60d)</div>
+      <div class="cw h180"><canvas id="c1h"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-t">Regime Distribution (60d)</div>
+      <div class="cw h180"><canvas id="c1r"></canvas></div>
+    </div>
   </div>
 </div>
+
+<!-- TAB 2: BACKTEST -->
 <div class="pn" id="p2">
   <div class="card">
-    <div class="ct">直近60日 レジームタイムライン</div>
-    <div id="rtl" style="display:flex;gap:2px;height:28px;border-radius:6px;overflow:hidden;margin-bottom:8px"></div>
-    <div style="display:flex;gap:16px;font-size:11px;color:var(--text3)">
-      <span>🟢 低ボラ安定</span><span>🟡 中ボラ</span><span>🔴 高ボラ不安定</span>
+    <div class="card-t">Model Performance vs Random Walk &mdash; 1-Day OOS (last 250d, walk-forward)</div>
+    <table id="tbt"></table>
+    <div class="note">
+      DM p値: Diebold-Mariano検定(対ナイーブ、二乗誤差)。p&lt;0.05でナイーブとの差が有意。
+      RMSE比&lt;1 がランダムウォーク超え。DA=方向一致率(予測変化が閾値未満の日は除外)。
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-t">Ensemble Multi-Step OOS</div>
+      <table id="tms"></table>
+    </div>
+    <div class="card">
+      <div class="card-t">Interval Calibration (holdout 60d)</div>
+      <table id="tcov"></table>
+      <div class="note">cov80はP10&ndash;P90に実績が入った割合(理想80%)、cov50はP25&ndash;P75(理想50%)。</div>
     </div>
   </div>
   <div class="card">
-    <div class="ct">ボラティリティ + 価格</div>
-    <div class="cw h240"><canvas id="c2"></canvas></div>
-    <div class="info"><strong>レジーム閾値</strong>：低ボラ &lt; 6.0% ≤ 中ボラ &lt; 8.9% ≤ 高ボラ（年率換算）</div>
+    <div class="card-t">Ensemble OOS Residuals (last 60d)</div>
+    <div class="cw h200"><canvas id="c2b"></canvas></div>
   </div>
 </div>
+
+<!-- TAB 3: PNL -->
 <div class="pn" id="p3">
   <div class="card">
-    <div class="ct">自動最適化されたアンサンブル重み</div>
+    <div class="card-t">Cost-Adjusted PnL Simulation &mdash; OOS (1-day signal)</div>
+    <div class="mstrip" id="pnlstrip" style="margin-bottom:14px"></div>
+    <div class="cw h240"><canvas id="c3p"></canvas></div>
+    <div class="note" id="pnlnote"></div>
+  </div>
+</div>
+
+<!-- TAB 4: OPTIMIZATION -->
+<div class="pn" id="p4">
+  <div class="card">
+    <div class="card-t">Current Ensemble Weights (selected from prior 150d errors only)</div>
     <div id="wrows"></div>
-    <div class="info" style="margin-top:16px">
-      <strong>重みの自動調整ロジック</strong>：直近200日の予測誤差を0.1刻みのグリッドサーチで最小化。レジームが変わると最適重みも変化します。今日の最適解 → カオス: 0% / AR: 80% / モメンタム: 20%
+    <div class="note">
+      重みはグリッドサーチ(0.1刻み)だが、選択に使う誤差窓と性能評価期間は完全分離(walk-forward)。
+      ナイーブも重み候補に含むため、他モデルに優位性がない局面では自動的にランダムウォークへ収束する。
     </div>
   </div>
   <div class="card">
-    <div class="ct">モデル別 1日先予測</div>
-    <div class="cw h200"><canvas id="c3"></canvas></div>
+    <div class="card-t">Weight Evolution &mdash; Last 60 Days</div>
+    <div class="cw h200"><canvas id="c4w"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-t">Configuration</div>
+    <table id="tcfg"></table>
   </div>
 </div>
-<div class="upd">自動更新: 毎週月〜金 日本時間 翌9時 | GitHub Actions + yfinance</div>
+
+<div class="foot">
+  Generated: 2026-06-12T22:23:19Z &nbsp;|&nbsp; Source: yfinance &nbsp;|&nbsp;
+  Auto-update: Mon&ndash;Fri 09:00 JST &nbsp;|&nbsp; GitHub Actions
 </div>
+
+</div>
+
 <script>
-const D={"last_price":160.26499938964844,"last_date":"2026/06/12","current_regime":0,"current_vol":0.0206289118604297,"vol_thresholds":[0.06028522518454081,0.08858490067507847],"weights":{"chaos":0.0,"ar":0.8,"momentum":0.2},"bt_n":200,"bt":{"chaos":{"rmse":1.970030899721556,"mae":1.502967667325187,"da":0.605},"ar":{"rmse":0.7773848168617843,"mae":0.5716912746639387,"da":0.7587939698492462},"momentum":{"rmse":0.8168647810164283,"mae":0.6028652265243533,"da":0.7437185929648241},"ensemble":{"rmse":0.7745465096048508}},"ens":[{"mean":160.257,"std":1.1784,"p10":158.7463,"p90":161.7677,"chaos":157.7113,"ar":160.2508,"momentum":160.2818},{"mean":160.2291,"std":1.4689,"p10":158.3459,"p90":162.1122,"chaos":157.4164,"ar":160.2121,"momentum":160.297},{"mean":160.2395,"std":1.9207,"p10":157.7771,"p90":162.7018,"chaos":157.2369,"ar":160.2217,"momentum":160.3106},{"mean":160.2502,"std":2.2081,"p10":157.4195,"p90":163.081,"chaos":157.3699,"ar":160.2321,"momentum":160.3229},{"mean":160.2479,"std":2.2077,"p10":157.4176,"p90":163.0782,"chaos":157.5739,"ar":160.2264,"momentum":160.3339}],"chaos_preds":[{"mean":157.711273914926,"std":1.17835971588765,"p10":156.68880157470704,"p90":158.66930694580077},{"mean":157.4164232302254,"std":1.4689273163956005,"p10":155.08300018310547,"p90":158.88299407958985},{"mean":157.23693771197827,"std":1.9206873783646745,"p10":154.14769897460937,"p90":158.84569396972657},{"mean":157.36992942593815,"std":2.208052996481553,"p10":153.0316940307617,"p90":158.8783935546875},{"mean":157.57391172248754,"std":2.2077328499534734,"p10":153.15540161132813,"p90":159.0699035644531}],"ar_preds":[160.2508,160.2121,160.2217,160.2321,160.2264],"mom_preds":[160.2818,160.297,160.3106,160.3229,160.3339],"last20_dates":["2026/05/18","2026/05/19","2026/05/20","2026/05/21","2026/05/22","2026/05/25","2026/05/26","2026/05/27","2026/05/28","2026/05/29","2026/06/01","2026/06/02","2026/06/03","2026/06/04","2026/06/05","2026/06/08","2026/06/09","2026/06/10","2026/06/11","2026/06/12"],"last20_prices":[158.843994140625,158.86099243164062,159.03500366210938,158.88800048828125,159.01800537109375,158.9459991455078,158.95399475097656,159.2429962158203,159.5679931640625,159.27000427246094,159.35299682617188,159.63600158691406,159.96800231933594,159.94000244140625,159.99000549316406,160.32699584960938,160.1739959716797,160.38400268554688,160.52699279785156,160.26499938964844],"regime_history":[{"date":"2026/03/23","price":159.23399353027344,"regime":1,"vol":0.07589029111874308},{"date":"2026/03/24","price":158.47900390625,"regime":1,"vol":0.07894317567139393},{"date":"2026/03/25","price":158.71800231933594,"regime":1,"vol":0.07500102708990995},{"date":"2026/03/26","price":159.38400268554688,"regime":1,"vol":0.07577363032039092},{"date":"2026/03/27","price":159.70399475097656,"regime":1,"vol":0.07493007105723591},{"date":"2026/03/30","price":160.23399353027344,"regime":1,"vol":0.07411009881260636},{"date":"2026/03/31","price":159.84100341796875,"regime":1,"vol":0.07434539049607258},{"date":"2026/04/01","price":158.57899475097656,"regime":1,"vol":0.07959090450917264},{"date":"2026/04/02","price":158.68800354003906,"regime":1,"vol":0.07723996299465515},{"date":"2026/04/03","price":159.49099731445312,"regime":1,"vol":0.07816536424715204},{"date":"2026/04/06","price":159.77999877929688,"regime":1,"vol":0.07615110383228976},{"date":"2026/04/07","price":159.68299865722656,"regime":1,"vol":0.07480727527652052},{"date":"2026/04/08","price":158.71600341796875,"regime":1,"vol":0.07810473213047679},{"date":"2026/04/09","price":158.64199829101562,"regime":1,"vol":0.07513233794345113},{"date":"2026/04/10","price":159.11199951171875,"regime":1,"vol":0.07583573627587117},{"date":"2026/04/13","price":159.67999267578125,"regime":1,"vol":0.07645892351655288},{"date":"2026/04/14","price":159.21400451660156,"regime":1,"vol":0.07646705934854565},{"date":"2026/04/15","price":158.79200744628906,"regime":1,"vol":0.07689455367385181},{"date":"2026/04/16","price":158.8090057373047,"regime":1,"vol":0.07403832897286607},{"date":"2026/04/17","price":159.19500732421875,"regime":1,"vol":0.061577113889268294},{"date":"2026/04/20","price":159.16099548339844,"regime":0,"vol":0.05452348754262252},{"date":"2026/04/21","price":158.843994140625,"regime":0,"vol":0.05229804507934522},{"date":"2026/04/22","price":159.3730010986328,"regime":0,"vol":0.053276705655984705},{"date":"2026/04/23","price":159.48800659179688,"regime":0,"vol":0.0513269349460305},{"date":"2026/04/24","price":159.7469940185547,"regime":0,"vol":0.0511582084504407},{"date":"2026/04/27","price":159.5760040283203,"regime":0,"vol":0.04982653302817998},{"date":"2026/04/28","price":159.35699462890625,"regime":0,"vol":0.04934920633461434},{"date":"2026/04/29","price":159.552001953125,"regime":0,"vol":0.0405550586341493},{"date":"2026/04/30","price":160.1840057373047,"regime":0,"vol":0.04247102618488943},{"date":"2026/05/01","price":156.97799682617188,"regime":1,"vol":0.08080581861464554},{"date":"2026/05/04","price":156.8459930419922,"regime":1,"vol":0.0802477987668819},{"date":"2026/05/05","price":157.19400024414062,"regime":1,"vol":0.08098067256784859},{"date":"2026/05/06","price":157.677001953125,"regime":1,"vol":0.07962345383963852},{"date":"2026/05/07","price":156.50799560546875,"regime":1,"vol":0.08334582063526907},{"date":"2026/05/08","price":156.82899475097656,"regime":1,"vol":0.08290425182526898},{"date":"2026/05/11","price":156.85800170898438,"regime":1,"vol":0.08151588536505462},{"date":"2026/05/12","price":157.2310028076172,"regime":1,"vol":0.08191239846575954},{"date":"2026/05/13","price":157.67100524902344,"regime":1,"vol":0.08238098985816009},{"date":"2026/05/14","price":157.8509979248047,"regime":1,"vol":0.0825314493177879},{"date":"2026/05/15","price":158.3820037841797,"regime":1,"vol":0.08298095396224851},{"date":"2026/05/18","price":158.843994140625,"regime":1,"vol":0.08370286879360121},{"date":"2026/05/19","price":158.86099243164062,"regime":1,"vol":0.08341899677655838},{"date":"2026/05/20","price":159.03500366210938,"regime":1,"vol":0.08265417096824941},{"date":"2026/05/21","price":158.88800048828125,"regime":1,"vol":0.0826427285364484},{"date":"2026/05/22","price":159.01800537109375,"regime":1,"vol":0.08246725445713352},{"date":"2026/05/25","price":158.9459991455078,"regime":1,"vol":0.08241542596492753},{"date":"2026/05/26","price":158.95399475097656,"regime":1,"vol":0.08230666702453561},{"date":"2026/05/27","price":159.2429962158203,"regime":1,"vol":0.0824547732620145},{"date":"2026/05/28","price":159.5679931640625,"regime":1,"vol":0.08153072974453718},{"date":"2026/05/29","price":159.27000427246094,"regime":0,"vol":0.037656720968618405},{"date":"2026/06/01","price":159.35299682617188,"regime":0,"vol":0.037235499791477764},{"date":"2026/06/02","price":159.63600158691406,"regime":0,"vol":0.037053576356379736},{"date":"2026/06/03","price":159.96800231933594,"regime":0,"vol":0.03643319170157387},{"date":"2026/06/04","price":159.94000244140625,"regime":0,"vol":0.0215564015644557},{"date":"2026/06/05","price":159.99000549316406,"regime":0,"vol":0.02141428075402134},{"date":"2026/06/08","price":160.32699584960938,"regime":0,"vol":0.02152553391041539},{"date":"2026/06/09","price":160.1739959716797,"regime":0,"vol":0.022103096379158672},{"date":"2026/06/10","price":160.38400268554688,"regime":0,"vol":0.021096761825996586},{"date":"2026/06/11","price":160.52699279785156,"regime":0,"vol":0.021071497082651332},{"date":"2026/06/12","price":160.26499938964844,"regime":0,"vol":0.0206289118604297}],"errors_ens_60":[1.3408,-0.5596,0.1896,0.7871,0.3893,0.5603,-0.2989,-1.195,0.2175,0.9161,0.2472,-0.1298,-0.9005,0.0056,0.5697,0.5743,-0.4585,-0.3841,0.1112,0.4258,-0.0362,-0.3138,0.5844,0.1712,0.2301,-0.1308,-0.1835,0.2447,0.6593,-3.223,-0.1965,0.5855,0.3421,-1.2492,0.3432,0.1724,0.3364,0.487,0.222,0.5844,0.5163,0.0333,0.1977,-0.0868,0.1362,-0.0465,-0.0031,0.3047,0.3309,-0.3065,0.0836,0.3433,0.328,-0.0391,0.0656,0.3724,-0.1391,0.2118,0.1761,-0.2374],"generated_at":"2026-06-12T12:41:39Z"};
-const RL=['低ボラ安定レジーム','中ボラ レジーム','高ボラ 不安定レジーム'];
-const RC=['r0','r1','r2'];
-const RCOL=['#3ddc84','#f0a830','#ff6b6b'];
-document.getElementById('rlabel').textContent=RL[D.current_regime];
-document.getElementById('rl2').textContent=RL[D.current_regime];
-// metrics
-const mg=document.getElementById('mg');
-const mk=(label,val,sub,vc)=>`<div class="m"><div class="ml">${label}</div><div class="mv" style="color:var(--${vc})">${val}</div><div class="ms">${sub}</div></div>`;
-mg.innerHTML=
-  mk('現在レート','¥'+D.last_price.toFixed(2),D.last_date,'blue')+
-  mk('1日先予測（中央値）','¥'+D.ens[0].mean.toFixed(2),'['+D.ens[0].p10.toFixed(2)+', '+D.ens[0].p90.toFixed(2)+']','green')+
-  mk('ボラティリティ（年率）',(D.current_vol*100).toFixed(2)+'%','現在レジーム: '+RL[D.current_regime],'amber')+
-  mk('AR 方向的中率',(D.bt.ar.da*100).toFixed(0)+'%','直近'+D.bt_n+'日BT','purple')+
-  mk('アンサンブル RMSE',D.bt.ensemble.rmse.toFixed(4),'自動最適化後','blue');
-// tab
+const D={"last_price":160.185,"last_date":"2026/06/13","current_regime":2,"current_vol":0.02018,"current_hurst":0.556,"current_adx":57.4,"weights":{"chaos":0.4,"ar":0.0,"momentum":0.0,"naive":0.6},"oos":{"chaos":{"rmse":0.7817,"mae":0.5856,"da":0.5354,"n":254},"ar":{"rmse":0.7914,"mae":0.5772,"da":0.4843,"n":254},"momentum":{"rmse":0.8336,"mae":0.616,"da":0.4606,"n":254},"naive":{"rmse":0.7777,"mae":0.5713,"da":null,"n":254},"ensemble":{"rmse":0.7768,"mae":0.5733,"da":0.5592,"n":254}},"dm":{"chaos":{"stat":0.376,"p":0.7072},"ar":{"stat":2.173,"p":0.0298},"momentum":{"stat":3.135,"p":0.0017},"ensemble":{"stat":-0.322,"p":0.7478}},"multistep":{"d1":{"rmse":0.7768,"mae":0.5733,"da":0.5592,"n":254},"d2":{"rmse":1.1036,"mae":0.8298,"da":0.5298,"n":253},"d3":{"rmse":1.3642,"mae":1.0111,"da":0.6067,"n":252},"d4":{"rmse":1.5643,"mae":1.1665,"da":0.5436,"n":251},"d5":{"rmse":1.7034,"mae":1.2569,"da":0.5203,"n":250}},"multistep_naive":{"d1":{"rmse":0.7777},"d2":{"rmse":1.0943},"d3":{"rmse":1.3446},"d4":{"rmse":1.5365},"d5":{"rmse":1.6827}},"coverage":{"d1":{"cov80":0.9333,"cov50":0.8333},"d2":{"cov80":0.95,"cov50":0.7667},"d3":{"cov80":0.9167,"cov50":0.7667},"d4":{"cov80":0.9333,"cov50":0.7833},"d5":{"cov80":0.9167,"cov50":0.8}},"pnl":{"total":8.4916,"sharpe":1.027,"hit":0.5225,"n_days":254,"n_trades":111,"max_dd":4.855,"cost":0.0015,"thresh":0.02},"pnl_series":[{"date":"2025/06/20","pnl":0.0},{"date":"2025/06/23","pnl":-0.0},{"date":"2025/06/24","pnl":-0.0},{"date":"2025/06/25","pnl":-0.0},{"date":"2025/06/26","pnl":-0.0},{"date":"2025/06/27","pnl":-0.0},{"date":"2025/06/30","pnl":-0.0},{"date":"2025/07/01","pnl":-0.0},{"date":"2025/07/02","pnl":0.0},{"date":"2025/07/03","pnl":0.0},{"date":"2025/07/04","pnl":-0.0},{"date":"2025/07/07","pnl":0.0},{"date":"2025/07/08","pnl":0.0},{"date":"2025/07/09","pnl":-0.0},{"date":"2025/07/10","pnl":0.0},{"date":"2025/07/11","pnl":0.0},{"date":"2025/07/14","pnl":0.0},{"date":"2025/07/15","pnl":0.0},{"date":"2025/07/16","pnl":-0.0},{"date":"2025/07/17","pnl":0.0},{"date":"2025/07/18","pnl":-0.0},{"date":"2025/07/21","pnl":-0.0},{"date":"2025/07/22","pnl":-0.0},{"date":"2025/07/23","pnl":-0.0},{"date":"2025/07/24","pnl":0.0},{"date":"2025/07/25","pnl":0.0},{"date":"2025/07/28","pnl":0.0},{"date":"2025/07/29","pnl":-0.0},{"date":"2025/07/30","pnl":0.0},{"date":"2025/07/31","pnl":0.0},{"date":"2025/08/01","pnl":-0.0},{"date":"2025/08/04","pnl":-0.0},{"date":"2025/08/05","pnl":0.0},{"date":"2025/08/06","pnl":-0.0},{"date":"2025/08/07","pnl":-0.0},{"date":"2025/08/08","pnl":0.0},{"date":"2025/08/11","pnl":0.0},{"date":"2025/08/12","pnl":-0.0},{"date":"2025/08/13","pnl":-0.0},{"date":"2025/08/14","pnl":0.0},{"date":"2025/08/15","pnl":-0.0},{"date":"2025/08/18","pnl":0.0},{"date":"2025/08/19","pnl":-0.0},{"date":"2025/08/20","pnl":-0.0},{"date":"2025/08/21","pnl":0.0},{"date":"2025/08/22","pnl":-0.0},{"date":"2025/08/25","pnl":0.0},{"date":"2025/08/26","pnl":-0.0},{"date":"2025/08/27","pnl":-0.0},{"date":"2025/08/28","pnl":-0.0},{"date":"2025/08/29","pnl":0.0},{"date":"2025/09/01","pnl":-0.0},{"date":"2025/09/02","pnl":0.0},{"date":"2025/09/03","pnl":-0.0},{"date":"2025/09/04","pnl":0.0},{"date":"2025/09/05","pnl":-0.0},{"date":"2025/09/08","pnl":-0.0},{"date":"2025/09/09","pnl":0.0},{"date":"2025/09/10","pnl":-0.0},{"date":"2025/09/11","pnl":-0.0},{"date":"2025/09/12","pnl":0.0},{"date":"2025/09/15","pnl":-0.0},{"date":"2025/09/16","pnl":-0.0},{"date":"2025/09/17","pnl":0.0},{"date":"2025/09/18","pnl":0.0},{"date":"2025/09/19","pnl":0.0},{"date":"2025/09/22","pnl":-0.0},{"date":"2025/09/23","pnl":-0.0},{"date":"2025/09/24","pnl":0.0},{"date":"2025/09/25","pnl":0.0},{"date":"2025/09/26","pnl":-0.0},{"date":"2025/09/29","pnl":-0.0},{"date":"2025/09/30","pnl":-0.0},{"date":"2025/10/01","pnl":-0.0},{"date":"2025/10/02","pnl":0.0},{"date":"2025/10/03","pnl":0.0},{"date":"2025/10/06","pnl":0.0},{"date":"2025/10/07","pnl":0.0},{"date":"2025/10/08","pnl":0.0},{"date":"2025/10/09","pnl":0.0},{"date":"2025/10/10","pnl":-0.0},{"date":"2025/10/13","pnl":0.0},{"date":"2025/10/14","pnl":-0.0},{"date":"2025/10/15","pnl":-0.0},{"date":"2025/10/16","pnl":-0.0},{"date":"2025/10/17","pnl":0.0},{"date":"2025/10/20","pnl":-0.0},{"date":"2025/10/21","pnl":0.0},{"date":"2025/10/22","pnl":0.0},{"date":"2025/10/23","pnl":0.0},{"date":"2025/10/24","pnl":0.0},{"date":"2025/10/27","pnl":-0.0},{"date":"2025/10/28","pnl":-0.0},{"date":"2025/10/29","pnl":0.0},{"date":"2025/10/30","pnl":0.0},{"date":"2025/10/31","pnl":0.0},{"date":"2025/11/03","pnl":0.0},{"date":"2025/11/04","pnl":-0.0},{"date":"2025/11/05","pnl":0.0},{"date":"2025/11/06","pnl":-0.0},{"date":"2025/11/07","pnl":0.0},{"date":"2025/11/10","pnl":0.0},{"date":"2025/11/11","pnl":-0.0725},{"date":"2025/11/12","pnl":0.638},{"date":"2025/11/13","pnl":-0.08},{"date":"2025/11/14","pnl":-0.048},{"date":"2025/11/17","pnl":0.688},{"date":"2025/11/18","pnl":0.275},{"date":"2025/11/19","pnl":1.444},{"date":"2025/11/20","pnl":0.377},{"date":"2025/11/21","pnl":-0.681},{"date":"2025/11/24","pnl":0.251},{"date":"2025/11/25","pnl":-0.709},{"date":"2025/11/26","pnl":0.009},{"date":"2025/11/27","pnl":0.045},{"date":"2025/11/28","pnl":-0.356},{"date":"2025/12/01","pnl":-0.0015},{"date":"2025/12/02","pnl":-0.2515},{"date":"2025/12/03","pnl":0.7},{"date":"2025/12/04","pnl":-0.0015},{"date":"2025/12/05","pnl":0.0},{"date":"2025/12/08","pnl":0.0},{"date":"2025/12/09","pnl":0.0},{"date":"2025/12/10","pnl":1.0465},{"date":"2025/12/11","pnl":-0.0015},{"date":"2025/12/12","pnl":-0.3225},{"date":"2025/12/15","pnl":0.873},{"date":"2025/12/16","pnl":0.237},{"date":"2025/12/17","pnl":-0.717},{"date":"2025/12/18","pnl":0.088},{"date":"2025/12/19","pnl":2.09},{"date":"2025/12/22","pnl":0.796},{"date":"2025/12/23","pnl":-0.0015},{"date":"2025/12/24","pnl":-0.0},{"date":"2025/12/26","pnl":-0.3745},{"date":"2025/12/29","pnl":0.45},{"date":"2025/12/30","pnl":-0.4},{"date":"2025/12/31","pnl":-0.318},{"date":"2026/01/02","pnl":-0.258},{"date":"2026/01/05","pnl":-0.0015},{"date":"2026/01/06","pnl":-0.0555},{"date":"2026/01/07","pnl":-0.051},{"date":"2026/01/08","pnl":-0.149},{"date":"2026/01/09","pnl":-1.269},{"date":"2026/01/12","pnl":0.163},{"date":"2026/01/13","pnl":-1.193},{"date":"2026/01/14","pnl":0.777},{"date":"2026/01/15","pnl":-0.194},{"date":"2026/01/16","pnl":1.061},{"date":"2026/01/19","pnl":-0.642},{"date":"2026/01/20","pnl":0.015},{"date":"2026/01/21","pnl":-0.294},{"date":"2026/01/22","pnl":-0.0015},{"date":"2026/01/23","pnl":3.3335},{"date":"2026/01/26","pnl":-0.833},{"date":"2026/01/27","pnl":-0.0015},{"date":"2026/01/28","pnl":0.0},{"date":"2026/01/29","pnl":0.0645},{"date":"2026/01/30","pnl":-2.043},{"date":"2026/02/02","pnl":-0.241},{"date":"2026/02/03","pnl":-0.356},{"date":"2026/02/04","pnl":-1.118},{"date":"2026/02/05","pnl":0.133},{"date":"2026/02/06","pnl":-0.46},{"date":"2026/02/09","pnl":1.112},{"date":"2026/02/10","pnl":1.65},{"date":"2026/02/11","pnl":1.213},{"date":"2026/02/12","pnl":0.448},{"date":"2026/02/13","pnl":0.042},{"date":"2026/02/16","pnl":-0.83},{"date":"2026/02/17","pnl":-0.0015},{"date":"2026/02/18","pnl":-1.5455},{"date":"2026/02/19","pnl":-0.0015},{"date":"2026/02/20","pnl":0.8195},{"date":"2026/02/23","pnl":-0.296},{"date":"2026/02/24","pnl":1.242},{"date":"2026/02/25","pnl":0.32},{"date":"2026/02/26","pnl":-0.0015},{"date":"2026/02/27","pnl":0.7725},{"date":"2026/03/02","pnl":-0.627},{"date":"2026/03/03","pnl":-0.516},{"date":"2026/03/04","pnl":0.79},{"date":"2026/03/05","pnl":-0.551},{"date":"2026/03/06","pnl":-0.893},{"date":"2026/03/09","pnl":-0.0015},{"date":"2026/03/10","pnl":-0.2675},{"date":"2026/03/11","pnl":-0.0015},{"date":"2026/03/12","pnl":0.1295},{"date":"2026/03/13","pnl":0.362},{"date":"2026/03/16","pnl":-0.463},{"date":"2026/03/17","pnl":-0.216},{"date":"2026/03/18","pnl":-0.0015},{"date":"2026/03/19","pnl":-0.0},{"date":"2026/03/20","pnl":-1.3115},{"date":"2026/03/23","pnl":-0.758},{"date":"2026/03/24","pnl":-0.0015},{"date":"2026/03/25","pnl":0.0},{"date":"2026/03/26","pnl":0.0},{"date":"2026/03/27","pnl":0.0},{"date":"2026/03/30","pnl":-0.0},{"date":"2026/03/31","pnl":1.2605},{"date":"2026/04/01","pnl":-0.109},{"date":"2026/04/02","pnl":-0.0015},{"date":"2026/04/03","pnl":-0.2905},{"date":"2026/04/06","pnl":0.097},{"date":"2026/04/07","pnl":-0.97},{"date":"2026/04/08","pnl":-0.0015},{"date":"2026/04/09","pnl":0.0},{"date":"2026/04/10","pnl":0.0},{"date":"2026/04/13","pnl":-0.0},{"date":"2026/04/14","pnl":-0.0},{"date":"2026/04/15","pnl":0.0},{"date":"2026/04/16","pnl":0.0},{"date":"2026/04/17","pnl":-0.0355},{"date":"2026/04/20","pnl":-0.317},{"date":"2026/04/21","pnl":0.529},{"date":"2026/04/22","pnl":-0.0015},{"date":"2026/04/23","pnl":-0.2605},{"date":"2026/04/24","pnl":-0.0015},{"date":"2026/04/27","pnl":-0.0},{"date":"2026/04/28","pnl":-0.1965},{"date":"2026/04/29","pnl":-0.0015},{"date":"2026/04/30","pnl":3.2045},{"date":"2026/05/01","pnl":0.132},{"date":"2026/05/04","pnl":-0.348},{"date":"2026/05/05","pnl":-0.0015},{"date":"2026/05/06","pnl":-0.0},{"date":"2026/05/07","pnl":0.3195},{"date":"2026/05/08","pnl":0.029},{"date":"2026/05/11","pnl":0.373},{"date":"2026/05/12","pnl":0.44},{"date":"2026/05/13","pnl":0.18},{"date":"2026/05/14","pnl":0.531},{"date":"2026/05/15","pnl":0.462},{"date":"2026/05/18","pnl":0.017},{"date":"2026/05/19","pnl":0.174},{"date":"2026/05/20","pnl":-0.147},{"date":"2026/05/21","pnl":0.13},{"date":"2026/05/22","pnl":-0.072},{"date":"2026/05/25","pnl":0.008},{"date":"2026/05/26","pnl":0.289},{"date":"2026/05/27","pnl":0.325},{"date":"2026/05/28","pnl":-0.0015},{"date":"2026/05/29","pnl":0.0815},{"date":"2026/06/01","pnl":0.283},{"date":"2026/06/02","pnl":0.332},{"date":"2026/06/03","pnl":-0.028},{"date":"2026/06/04","pnl":0.05},{"date":"2026/06/05","pnl":-0.34},{"date":"2026/06/08","pnl":-0.0015},{"date":"2026/06/09","pnl":-0.2115},{"date":"2026/06/10","pnl":-0.143},{"date":"2026/06/11","pnl":-0.0015},{"date":"2026/06/12","pnl":0.0535}],"ens":[{"mean":160.3057,"p10":159.4787,"p25":159.9251,"p50":160.3714,"p75":160.8027,"p90":161.2787,"up_prob":0.6339,"chaos":160.4868,"ar":160.259,"momentum":160.1523,"naive":160.185},{"mean":160.3636,"p10":159.3012,"p25":159.8568,"p50":160.5614,"p75":161.1106,"p90":161.8271,"up_prob":0.6364,"chaos":160.6314,"ar":160.3527,"momentum":160.1228,"naive":160.185},{"mean":160.3978,"p10":159.1094,"p25":159.9443,"p50":160.524,"p75":161.3216,"p90":162.1698,"up_prob":0.6468,"chaos":160.717,"ar":160.443,"momentum":160.0963,"naive":160.185},{"mean":160.4054,"p10":158.9431,"p25":159.7471,"p50":160.6865,"p75":161.5399,"p90":162.2394,"up_prob":0.6693,"chaos":160.7361,"ar":160.5465,"momentum":160.0724,"naive":160.185},{"mean":160.3789,"p10":158.6909,"p25":159.8817,"p50":160.6995,"p75":161.7054,"p90":162.4892,"up_prob":0.68,"chaos":160.6699,"ar":160.6011,"momentum":160.0509,"naive":160.185}],"ar_preds":[160.259,160.3527,160.443,160.5465,160.6011],"transition_prob":[[0.9195,0.047,0.0268,0.0067,0.0],[0.0972,0.875,0.0139,0.0139,0.0],[0.0909,0.0,0.8182,0.0909,0.0],[0.25,0.25,0.0,0.5,0.0],[0.0,0.0,0.0,0.0,0.0]],"last20_dates":["2026/05/19","2026/05/20","2026/05/21","2026/05/22","2026/05/25","2026/05/26","2026/05/27","2026/05/28","2026/05/29","2026/06/01","2026/06/02","2026/06/03","2026/06/04","2026/06/05","2026/06/08","2026/06/09","2026/06/10","2026/06/11","2026/06/12","2026/06/13"],"last20_prices":[158.861,159.035,158.888,159.018,158.946,158.954,159.243,159.568,159.27,159.353,159.636,159.968,159.94,159.99,160.327,160.174,160.384,160.527,160.13,160.185],"regime_history":[{"date":"2026/03/24","price":158.479,"regime":0,"vol":0.078943,"adx":40.46,"hurst":0.5431},{"date":"2026/03/25","price":158.718,"regime":0,"vol":0.075001,"adx":38.87,"hurst":0.5302},{"date":"2026/03/26","price":159.384,"regime":2,"vol":0.075774,"adx":37.84,"hurst":0.5619},{"date":"2026/03/27","price":159.704,"regime":2,"vol":0.07493,"adx":36.03,"hurst":0.6358},{"date":"2026/03/30","price":160.234,"regime":2,"vol":0.07411,"adx":33.69,"hurst":0.7639},{"date":"2026/03/31","price":159.841,"regime":2,"vol":0.074345,"adx":32.34,"hurst":0.7449},{"date":"2026/04/01","price":158.579,"regime":2,"vol":0.079591,"adx":29.34,"hurst":0.6625},{"date":"2026/04/02","price":158.688,"regime":3,"vol":0.07724,"adx":26.52,"hurst":0.679},{"date":"2026/04/03","price":159.491,"regime":0,"vol":0.078165,"adx":23.74,"hurst":0.5591},{"date":"2026/04/06","price":159.78,"regime":0,"vol":0.076151,"adx":19.85,"hurst":0.6448},{"date":"2026/04/07","price":159.683,"regime":0,"vol":0.074807,"adx":16.87,"hurst":0.6283},{"date":"2026/04/08","price":158.716,"regime":0,"vol":0.078105,"adx":14.4,"hurst":0.5693},{"date":"2026/04/09","price":158.642,"regime":0,"vol":0.075132,"adx":12.33,"hurst":0.6105},{"date":"2026/04/10","price":159.112,"regime":0,"vol":0.075836,"adx":11.9,"hurst":0.6168},{"date":"2026/04/13","price":159.68,"regime":0,"vol":0.076459,"adx":10.63,"hurst":0.6347},{"date":"2026/04/14","price":159.214,"regime":0,"vol":0.076467,"adx":10.53,"hurst":0.6315},{"date":"2026/04/15","price":158.792,"regime":0,"vol":0.076895,"adx":9.99,"hurst":0.5528},{"date":"2026/04/16","price":158.809,"regime":0,"vol":0.074038,"adx":8.98,"hurst":0.5594},{"date":"2026/04/17","price":159.195,"regime":0,"vol":0.061577,"adx":8.02,"hurst":0.5772},{"date":"2026/04/20","price":159.161,"regime":0,"vol":0.054523,"adx":7.89,"hurst":0.5503},{"date":"2026/04/21","price":158.844,"regime":0,"vol":0.052298,"adx":7.53,"hurst":0.5573},{"date":"2026/04/22","price":159.373,"regime":0,"vol":0.053277,"adx":8.18,"hurst":0.5948},{"date":"2026/04/23","price":159.488,"regime":0,"vol":0.051327,"adx":8.87,"hurst":0.6101},{"date":"2026/04/24","price":159.747,"regime":0,"vol":0.051158,"adx":9.03,"hurst":0.5897},{"date":"2026/04/27","price":159.576,"regime":0,"vol":0.049827,"adx":9.17,"hurst":0.6327},{"date":"2026/04/28","price":159.357,"regime":0,"vol":0.049349,"adx":9.21,"hurst":0.6637},{"date":"2026/04/29","price":159.552,"regime":0,"vol":0.040555,"adx":10.41,"hurst":0.5902},{"date":"2026/04/30","price":160.184,"regime":0,"vol":0.042471,"adx":11.76,"hurst":0.5716},{"date":"2026/05/01","price":156.978,"regime":1,"vol":0.080806,"adx":12.69,"hurst":0.5798},{"date":"2026/05/04","price":156.846,"regime":1,"vol":0.080248,"adx":14.96,"hurst":0.6043},{"date":"2026/05/05","price":157.194,"regime":1,"vol":0.080981,"adx":16.21,"hurst":0.6074},{"date":"2026/05/06","price":157.677,"regime":1,"vol":0.079623,"adx":17.2,"hurst":0.6438},{"date":"2026/05/07","price":156.508,"regime":1,"vol":0.083346,"adx":18.51,"hurst":0.5728},{"date":"2026/05/08","price":156.829,"regime":1,"vol":0.082904,"adx":19.95,"hurst":0.5425},{"date":"2026/05/11","price":156.858,"regime":1,"vol":0.081516,"adx":20.71,"hurst":0.633},{"date":"2026/05/12","price":157.231,"regime":1,"vol":0.081912,"adx":20.97,"hurst":0.6112},{"date":"2026/05/13","price":157.671,"regime":1,"vol":0.082381,"adx":21.42,"hurst":0.548},{"date":"2026/05/14","price":157.851,"regime":1,"vol":0.082531,"adx":21.8,"hurst":0.5358},{"date":"2026/05/15","price":158.382,"regime":1,"vol":0.082981,"adx":22.54,"hurst":0.5752},{"date":"2026/05/18","price":158.844,"regime":1,"vol":0.083703,"adx":22.82,"hurst":0.5114},{"date":"2026/05/19","price":158.861,"regime":1,"vol":0.083419,"adx":22.77,"hurst":0.5582},{"date":"2026/05/20","price":159.035,"regime":1,"vol":0.082654,"adx":21.86,"hurst":0.6438},{"date":"2026/05/21","price":158.888,"regime":1,"vol":0.082643,"adx":20.8,"hurst":0.6339},{"date":"2026/05/22","price":159.018,"regime":1,"vol":0.082467,"adx":21.67,"hurst":0.606},{"date":"2026/05/25","price":158.946,"regime":1,"vol":0.082415,"adx":21.88,"hurst":0.6383},{"date":"2026/05/26","price":158.954,"regime":1,"vol":0.082307,"adx":22.54,"hurst":0.6449},{"date":"2026/05/27","price":159.243,"regime":1,"vol":0.082455,"adx":23.89,"hurst":0.6243},{"date":"2026/05/28","price":159.568,"regime":2,"vol":0.081531,"adx":27.85,"hurst":0.692},{"date":"2026/05/29","price":159.27,"regime":2,"vol":0.037657,"adx":30.59,"hurst":0.6404},{"date":"2026/06/01","price":159.353,"regime":2,"vol":0.037235,"adx":33.41,"hurst":0.6947},{"date":"2026/06/02","price":159.636,"regime":2,"vol":0.037054,"adx":36.76,"hurst":0.6706},{"date":"2026/06/03","price":159.968,"regime":2,"vol":0.036433,"adx":39.95,"hurst":0.6009},{"date":"2026/06/04","price":159.94,"regime":2,"vol":0.021556,"adx":43.0,"hurst":0.5559},{"date":"2026/06/05","price":159.99,"regime":0,"vol":0.021414,"adx":45.89,"hurst":0.4946},{"date":"2026/06/08","price":160.327,"regime":0,"vol":0.021526,"adx":49.17,"hurst":0.5139},{"date":"2026/06/09","price":160.174,"regime":0,"vol":0.022103,"adx":52.02,"hurst":0.5257},{"date":"2026/06/10","price":160.384,"regime":0,"vol":0.021097,"adx":54.89,"hurst":0.4836},{"date":"2026/06/11","price":160.527,"regime":0,"vol":0.021071,"adx":57.8,"hurst":0.4893},{"date":"2026/06/12","price":160.13,"regime":2,"vol":0.021938,"adx":57.5,"hurst":0.579},{"date":"2026/06/13","price":160.185,"regime":2,"vol":0.02018,"adx":57.4,"hurst":0.556}],"errors_ens_60":[{"date":"2026/03/23","e":-0.8244},{"date":"2026/03/24","e":0.2334},{"date":"2026/03/25","e":0.6726},{"date":"2026/03/26","e":0.3126},{"date":"2026/03/27","e":0.5316},{"date":"2026/03/30","e":-0.3855},{"date":"2026/03/31","e":-1.192},{"date":"2026/04/01","e":0.1588},{"date":"2026/04/02","e":0.7868},{"date":"2026/04/03","e":0.3389},{"date":"2026/04/06","e":-0.0362},{"date":"2026/04/07","e":-0.9938},{"date":"2026/04/08","e":-0.0823},{"date":"2026/04/09","e":0.4679},{"date":"2026/04/10","e":0.574},{"date":"2026/04/13","e":-0.4555},{"date":"2026/04/14","e":-0.4345},{"date":"2026/04/15","e":0.0062},{"date":"2026/04/16","e":0.3743},{"date":"2026/04/17","e":-0.1337},{"date":"2026/04/20","e":-0.475},{"date":"2026/04/21","e":0.4319},{"date":"2026/04/22","e":0.0952},{"date":"2026/04/23","e":0.3075},{"date":"2026/04/24","e":-0.156},{"date":"2026/04/27","e":-0.2223},{"date":"2026/04/28","e":0.2338},{"date":"2026/04/29","e":0.6164},{"date":"2026/04/30","e":-3.1734},{"date":"2026/05/01","e":-0.0711},{"date":"2026/05/04","e":0.3724},{"date":"2026/05/05","e":0.497},{"date":"2026/05/06","e":-1.1637},{"date":"2026/05/07","e":0.2556},{"date":"2026/05/08","e":-0.0348},{"date":"2026/05/11","e":0.3353},{"date":"2026/05/12","e":0.3953},{"date":"2026/05/13","e":0.1082},{"date":"2026/05/14","e":0.4677},{"date":"2026/05/15","e":0.3897},{"date":"2026/05/18","e":-0.0633},{"date":"2026/05/19","e":0.0443},{"date":"2026/05/20","e":-0.2734},{"date":"2026/05/21","e":0.0268},{"date":"2026/05/22","e":-0.1282},{"date":"2026/05/25","e":-0.0763},{"date":"2026/05/26","e":0.2023},{"date":"2026/05/27","e":0.2605},{"date":"2026/05/28","e":-0.2795},{"date":"2026/05/29","e":0.0142},{"date":"2026/06/01","e":0.2139},{"date":"2026/06/02","e":0.2614},{"date":"2026/06/03","e":-0.1014},{"date":"2026/06/04","e":-0.0309},{"date":"2026/06/05","e":0.3604},{"date":"2026/06/08","e":-0.1345},{"date":"2026/06/09","e":0.2351},{"date":"2026/06/10","e":0.1759},{"date":"2026/06/11","e":-0.3924},{"date":"2026/06/12","e":-0.0551}],"weights_history":[{"date":"2026/03/23","w":[0.4,0.0,0.0,0.6]},{"date":"2026/03/24","w":[0.3,0.0,0.0,0.7]},{"date":"2026/03/25","w":[0.4,0.0,0.0,0.6]},{"date":"2026/03/26","w":[0.3,0.0,0.0,0.7]},{"date":"2026/03/27","w":[0.4,0.0,0.0,0.6]},{"date":"2026/03/30","w":[0.4,0.0,0.0,0.6]},{"date":"2026/03/31","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/01","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/02","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/03","w":[0.3,0.0,0.0,0.7]},{"date":"2026/04/06","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/07","w":[0.3,0.0,0.0,0.7]},{"date":"2026/04/08","w":[0.3,0.0,0.0,0.7]},{"date":"2026/04/09","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/10","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/13","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/14","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/15","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/16","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/17","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/20","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/21","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/22","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/23","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/24","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/27","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/28","w":[0.3,0.0,0.0,0.7]},{"date":"2026/04/29","w":[0.4,0.0,0.0,0.6]},{"date":"2026/04/30","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/01","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/04","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/05","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/06","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/07","w":[0.3,0.0,0.0,0.7]},{"date":"2026/05/08","w":[0.3,0.0,0.0,0.7]},{"date":"2026/05/11","w":[0.3,0.0,0.0,0.7]},{"date":"2026/05/12","w":[0.3,0.1,0.0,0.6]},{"date":"2026/05/13","w":[0.3,0.0,0.0,0.7]},{"date":"2026/05/14","w":[0.3,0.0,0.0,0.7]},{"date":"2026/05/15","w":[0.3,0.0,0.0,0.7]},{"date":"2026/05/18","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/19","w":[0.5,0.0,0.0,0.5]},{"date":"2026/05/20","w":[0.5,0.0,0.0,0.5]},{"date":"2026/05/21","w":[0.5,0.0,0.0,0.5]},{"date":"2026/05/22","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/25","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/26","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/27","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/28","w":[0.4,0.0,0.0,0.6]},{"date":"2026/05/29","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/01","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/02","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/03","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/04","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/05","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/08","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/09","w":[0.5,0.0,0.0,0.5]},{"date":"2026/06/10","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/11","w":[0.4,0.0,0.0,0.6]},{"date":"2026/06/12","w":[0.4,0.0,0.0,0.6]}],"config":{"tau (ACF zero-cross)":20,"embedding dim":"3 delay + momentum + vol (5d)","k-NN":15,"normalization":"causal rolling z-score (252d)","regime vol threshold":"causal rolling median (252d)","weight selection window":"150d (walk-forward)","OOS evaluation window":"250d","intervals":"conformal (OOS residual quantiles)","cost assumption":"0.0015 JPY one-way"},"generated_at":"2026-06-12T22:23:19Z"};
+const RN=["Low Vol Range", "High Vol Range", "Bull Trend", "Bear Trend", "Unstable"];
+const RC=['#3ddc84','#4a9eff','#f0a830','#ff6b6b','#a070ff'];
+
+document.getElementById('hprice').textContent='¥'+D.last_price.toFixed(2);
+document.getElementById('hdate').textContent=D.last_date+' Close';
+const rb=document.getElementById('rbadge');
+rb.className='rbadge r'+D.current_regime;
+document.getElementById('rlabel').textContent=RN[D.current_regime];
+
+const ratio=D.oos.ensemble.rmse/D.oos.naive.rmse;
+const mData=[
+  {l:'1D Forecast',v:'¥'+D.ens[0].mean.toFixed(2),s:'['+D.ens[0].p10.toFixed(2)+', '+D.ens[0].p90.toFixed(2)+']',c:'cyan'},
+  {l:'Up Probability',v:(D.ens[0].up_prob*100).toFixed(0)+'%',s:'OOS residual based',c:D.ens[0].up_prob>0.5?'green':'red'},
+  {l:'RMSE vs Naive',v:ratio.toFixed(3),s:ratio<1?'beats random walk':'no edge vs RW',c:ratio<1?'green':'red'},
+  {l:'OOS Dir. Acc.',v:D.oos.ensemble.da!=null?(D.oos.ensemble.da*100).toFixed(0)+'%':'—',s:'1d, walk-forward',c:'blue'},
+  {l:'P10–P90 Coverage',v:D.coverage.d1?(D.coverage.d1.cov80*100).toFixed(0)+'%':'—',s:'target 80%',c:'purple'},
+  {l:'Volatility (Ann.)',v:(D.current_vol*100).toFixed(2)+'%',s:'Hurst '+D.current_hurst.toFixed(2),c:'amber'},
+];
+document.getElementById('mstrip').innerHTML=mData.map(m=>
+  `<div class="mc"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${m.c})">${m.v}</div><div class="mc-s">${m.s}</div></div>`
+).join('');
+
 const tabs=document.querySelectorAll('.tab');
 const panels=document.querySelectorAll('.pn');
 function sw(i){tabs.forEach((t,j)=>t.classList.toggle('on',i===j));panels.forEach((p,j)=>p.classList.toggle('on',i===j));}
-// --- chart 0: prediction ---
-const lp=D.last20_prices, ld=D.last20_dates;
+
+// ---- TAB 0 ----
+const lp=D.last20_prices, ld=D.last20_dates, nL=lp.length;
 const pLabels=[...ld.map(d=>d.slice(5)),'+1','+2','+3','+4','+5'];
-const nL=lp.length;
+const nPad=Array(nL-1).fill(null);
 const actData=[...lp,...Array(5).fill(null)];
-const ensM=[...Array(nL-1).fill(null),D.last_price,...D.ens.map(p=>p.mean)];
-const ensP10=[...Array(nL-1).fill(null),D.last_price,...D.ens.map(p=>p.p10)];
-const ensP90=[...Array(nL-1).fill(null),D.last_price,...D.ens.map(p=>p.p90)];
-const arM=[...Array(nL-1).fill(null),D.last_price,...D.ar_preds];
-const chM=[...Array(nL-1).fill(null),D.last_price,...D.chaos_preds.map(p=>p.mean)];
-const ymin=Math.min(...lp,...D.ens.map(p=>p.p10))-1;
-const ymax=Math.max(...lp,...D.ens.map(p=>p.p90))+1;
+const ensM=[...nPad,D.last_price,...D.ens.map(p=>p.mean)];
+const p10=[...nPad,D.last_price,...D.ens.map(p=>p.p10)];
+const p25=[...nPad,D.last_price,...D.ens.map(p=>p.p25)];
+const p75=[...nPad,D.last_price,...D.ens.map(p=>p.p75)];
+const p90=[...nPad,D.last_price,...D.ens.map(p=>p.p90)];
+const arM=[...nPad,D.last_price,...D.ar_preds];
+const allVals=[...lp,...D.ens.map(p=>p.p10),...D.ens.map(p=>p.p90)].filter(v=>v!=null);
+const ymin=Math.min(...allVals)-0.5, ymax=Math.max(...allVals)+0.5;
+
 new Chart(document.getElementById('c0'),{
-  type:'line',data:{labels:pLabels,datasets:[
-    {data:ensP90,borderWidth:0,pointRadius:0,fill:'+1',backgroundColor:'rgba(74,158,255,0.13)',tension:.3,spanGaps:true},
-    {data:ensP10,borderWidth:0,pointRadius:0,fill:false,tension:.3,spanGaps:true},
-    {label:'アンサンブル',data:ensM,borderColor:'#4a9eff',borderWidth:2.5,pointRadius:3,fill:false,tension:.3,spanGaps:true},
-    {label:'AR(5)',data:arM,borderColor:'rgba(240,168,48,.7)',borderWidth:1.5,pointRadius:2,borderDash:[3,2],fill:false,tension:.3,spanGaps:true},
-    {label:'カオスk-NN',data:chM,borderColor:'rgba(160,112,255,.7)',borderWidth:1.5,pointRadius:2,borderDash:[4,3],fill:false,tension:.3,spanGaps:true},
-    {label:'実績',data:actData,borderColor:'#3ddc84',borderWidth:2,pointRadius:3,fill:false,tension:.3}
+  type:'line',
+  data:{labels:pLabels,datasets:[
+    {data:p90,borderWidth:0,pointRadius:0,fill:'+1',backgroundColor:'rgba(0,212,255,0.06)',spanGaps:true},
+    {data:p75,borderWidth:0,pointRadius:0,fill:'+1',backgroundColor:'rgba(0,212,255,0.10)',spanGaps:true},
+    {data:p25,borderWidth:0,pointRadius:0,fill:'+1',backgroundColor:'rgba(0,212,255,0.06)',spanGaps:true},
+    {data:p10,borderWidth:0,pointRadius:0,fill:false,spanGaps:true},
+    {label:'Ensemble',data:ensM,borderColor:'#00d4ff',borderWidth:2,pointRadius:3,fill:false,tension:.3,spanGaps:true},
+    {label:'AR(5)',data:arM,borderColor:'rgba(255,170,0,.6)',borderWidth:1.5,pointRadius:2,borderDash:[3,2],fill:false,tension:.3,spanGaps:true},
+    {label:'Actual',data:actData,borderColor:'#00ff88',borderWidth:2,pointRadius:2,fill:false,tension:.2},
   ]},
   options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>ctx.parsed.y!=null?ctx.dataset.label+': ¥'+ctx.parsed.y.toFixed(2):''}}},
-    scales:{x:{grid:{color:'rgba(42,48,69,.8)'},ticks:{color:'#6a7090',maxRotation:45,autoSkip:false,maxTicksLimit:15}},y:{grid:{color:'rgba(42,48,69,.8)'},ticks:{color:'#6a7090',callback:v=>'¥'+v.toFixed(1)},min:ymin,max:ymax}}
-  }
-});
-// pred table
-const days=['+1日','+2日','+3日','+4日','+5日'];
-const pMin=ymin,pMax=ymax;
-let th='<tr><th>日</th><th>中央値</th><th>80%信頼区間</th><th>カオス</th><th>AR(5)</th><th>モメンタム</th></tr>';
-D.ens.forEach((p,i)=>{
-  const pct=(p.mean-pMin)/(pMax-pMin)*100;
-  const bw=(p.p90-p.p10)/(pMax-pMin)*100;
-  const d=p.mean>D.last_price?'↑':p.mean<D.last_price?'↓':'→';
-  const dc=p.mean>D.last_price?'green':p.mean<D.last_price?'red':'amber';
-  th+=`<tr><td>${days[i]}</td><td style="color:var(--${dc});font-weight:600">${d} ${p.mean.toFixed(2)}</td>
-    <td><div style="display:flex;align-items:center;gap:6px;font-size:12px">
-      <span style="color:var(--text3);min-width:44px">${p.p10.toFixed(1)}</span>
-      <div class="bar-bg"><div class="bar-f" style="left:${Math.max(0,pct-bw/2)}%;width:${bw}%"></div><div class="bar-m" style="left:${pct}%"></div></div>
-      <span style="color:var(--text3);min-width:44px;text-align:right">${p.p90.toFixed(1)}</span>
-    </div></td>
-    <td style="color:var(--purple)">${p.chaos.toFixed(2)}</td>
-    <td style="color:var(--amber)">${p.ar.toFixed(2)}</td>
-    <td style="color:var(--text2)">${p.momentum.toFixed(2)}</td></tr>`;
-});
-document.getElementById('t0').innerHTML=th;
-// backtest rows
-const btModels=[
-  {k:'ar',name:'AR(5)',note:'通常最強',c:'#f0a830'},
-  {k:'ensemble',name:'アンサンブル',note:'自動最適化',c:'#3ddc84'},
-  {k:'momentum',name:'モメンタム',note:'トレンド追従',c:'#4a9eff'},
-  {k:'chaos',name:'カオス k-NN',note:'位相空間',c:'#a070ff'},
-];
-const maxR=Math.max(...btModels.map(m=>D.bt[m.k]?.rmse||0))*1.1;
-let bth='<div style="display:grid;grid-template-columns:130px 1fr 80px 80px 80px;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--text3)">モデル</span><span></span><span style="font-size:11px;color:var(--text3);text-align:right">RMSE</span><span style="font-size:11px;color:var(--text3);text-align:right">MAE</span><span style="font-size:11px;color:var(--text3);text-align:right">方向的中率</span></div>';
-btModels.forEach(m=>{
-  const b=D.bt[m.k]||{};
-  const bw=b.rmse?Math.min(100,b.rmse/maxR*100):0;
-  bth+=`<div style="display:grid;grid-template-columns:130px 1fr 80px 80px 80px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
-    <div style="color:${m.c};font-size:13px;font-weight:500">${m.name}<br><span style="font-size:11px;color:var(--text3)">${m.note}</span></div>
-    <div><div style="height:8px;background:var(--bg4);border-radius:4px"><div class="rb" style="width:${bw}%;background:${m.c}"></div></div></div>
-    <div style="text-align:right;font-size:13px;color:${m.c}">${b.rmse!=null?b.rmse.toFixed(4):'—'}</div>
-    <div style="text-align:right;font-size:13px;color:${m.c}">${b.mae!=null?b.mae.toFixed(4):'—'}</div>
-    <div style="text-align:right;font-size:13px;color:${m.c}">${b.da!=null?(b.da*100).toFixed(0)+'%':'—'}</div>
-  </div>`;
-});
-document.getElementById('btr').innerHTML=bth;
-// residual chart
-const rh=D.regime_history.slice(-60);
-const rLabels=rh.map(r=>r.date.slice(5));
-const resEns=D.errors_ens_60||[];
-new Chart(document.getElementById('c1'),{
-  type:'bar',data:{labels:rLabels,datasets:[
-    {label:'アンサンブル残差',data:resEns,backgroundColor:resEns.map(v=>v>=0?'rgba(74,158,255,.6)':'rgba(255,107,107,.5)'),borderWidth:0,borderRadius:2}
-  ]},
-  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{x:{grid:{color:'rgba(42,48,69,.5)'},ticks:{color:'#6a7090',maxTicksLimit:10,maxRotation:45}},y:{grid:{color:'rgba(42,48,69,.5)'},ticks:{color:'#6a7090'},title:{display:true,text:'残差（円）',color:'#6a7090'}}}
-  }
-});
-// regime timeline
-const rtl=document.getElementById('rtl');
-const regCols=['#3ddc84','#f0a830','#ff6b6b'];
-rh.forEach(r=>{
-  const s=document.createElement('div');
-  s.style.cssText=`flex:1;background:${regCols[r.regime]};opacity:.7`;
-  s.title=`${r.date} ¥${r.price} | ${RL[r.regime]}`;
-  rtl.appendChild(s);
-});
-// regime chart
-new Chart(document.getElementById('c2'),{
-  type:'line',data:{labels:rh.map(r=>r.date.slice(5)),datasets:[
-    {label:'価格',data:rh.map(r=>r.price),borderColor:'#4a9eff',borderWidth:2,pointRadius:1,fill:false,tension:.3,yAxisID:'y'},
-    {label:'ボラ年率',data:rh.map(r=>parseFloat((r.vol*100).toFixed(2))),borderColor:'#f0a830',borderWidth:1.5,pointRadius:1,borderDash:[3,2],fill:false,tension:.3,yAxisID:'y2'}
-  ]},
-  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,
+      callbacks:{label:ctx=>ctx.parsed.y!=null&&ctx.dataset.label?ctx.dataset.label+': ¥'+ctx.parsed.y.toFixed(2):''}}},
     scales:{
-      x:{grid:{color:'rgba(42,48,69,.5)'},ticks:{color:'#6a7090',maxTicksLimit:10,maxRotation:45}},
-      y:{grid:{color:'rgba(42,48,69,.5)'},ticks:{color:'#4a9eff',callback:v=>'¥'+v.toFixed(1)},position:'left'},
-      y2:{grid:{display:false},ticks:{color:'#f0a830',callback:v=>v+'%'},position:'right',min:0}
+      x:{grid:{color:'rgba(30,45,69,.6)'},ticks:{color:'#556688',maxRotation:45,autoSkip:false,maxTicksLimit:15}},
+      y:{grid:{color:'rgba(30,45,69,.6)'},ticks:{color:'#556688',callback:v=>'¥'+v.toFixed(1)},min:ymin,max:ymax}
     }
   }
 });
-// weight rows
-const wk=[['chaos','カオス k-NN','purple'],['ar','AR(5)','amber'],['momentum','モメンタム','blue']];
+
+let th='<tr><th>Day</th><th>Median</th><th>P10–P90</th><th>Up%</th><th>NaiveΔ</th></tr>';
+D.ens.forEach((p,i)=>{
+  const up=p.up_prob>=0.5;
+  const arrow=p.mean>D.last_price?'↑':p.mean<D.last_price?'↓':'—';
+  const ac=p.mean>D.last_price?'green':p.mean<D.last_price?'red':'amber';
+  const probColor=up?'var(--green)':'var(--red)';
+  th+=`<tr>
+    <td style="color:var(--text3);font-size:11px">+${i+1}d</td>
+    <td style="color:var(--${ac});font-weight:500">${arrow} ${p.mean.toFixed(2)}</td>
+    <td style="font-size:11px;color:var(--text3)">${p.p10.toFixed(2)} – ${p.p90.toFixed(2)}</td>
+    <td>
+      <div style="font-size:12px;color:${probColor}">${(p.up_prob*100).toFixed(0)}%</div>
+      <div class="prob-bar"><div style="height:100%;width:${(p.up_prob*100).toFixed(0)}%;background:${probColor}"></div></div>
+    </td>
+    <td style="color:var(--text2);font-size:11px">${(p.mean-D.last_price>=0?'+':'')+(p.mean-D.last_price).toFixed(2)}</td>
+  </tr>`;
+});
+document.getElementById('t0').innerHTML=th;
+
+const trans=D.transition_prob[D.current_regime];
+let tmh='';
+trans.forEach((p,j)=>{
+  if(p<0.01) return;
+  tmh+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px">
+    <div style="width:120px;color:var(--text3);font-size:10px">${RN[j]}</div>
+    <div style="flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden"><div style="height:100%;width:${(p*100).toFixed(0)}%;background:${RC[j]};border-radius:3px"></div></div>
+    <div style="width:36px;text-align:right;color:${RC[j]}">${(p*100).toFixed(0)}%</div>
+  </div>`;
+});
+document.getElementById('tmat').innerHTML=tmh;
+
+let udh='';
+D.ens.forEach((p,i)=>{
+  const up=p.up_prob;
+  udh+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px">
+    <span style="color:var(--text3);width:24px">+${i+1}</span>
+    <div style="flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${(up*100).toFixed(0)}%;background:var(--green);border-radius:3px"></div>
+    </div>
+    <span style="color:var(--green);width:36px">${(up*100).toFixed(0)}%↑</span>
+    <span style="color:var(--red);width:36px">${((1-up)*100).toFixed(0)}%↓</span>
+  </div>`;
+});
+document.getElementById('updown').innerHTML=udh;
+
+// ---- TAB 1 ----
+const rh=D.regime_history;
+const rtl=document.getElementById('rtl');
+rh.forEach(r=>{
+  const s=document.createElement('div');
+  s.className='rt-seg';
+  s.style.background=RC[r.regime];
+  s.style.opacity='.75';
+  s.title=`${r.date} ¥${r.price.toFixed(2)} | ${RN[r.regime]}`;
+  rtl.appendChild(s);
+});
+document.getElementById('rlegend').innerHTML=RN.map((n,i)=>
+  `<span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:${RC[i]};display:inline-block"></span>${n}</span>`
+).join('');
+
+new Chart(document.getElementById('c1'),{
+  type:'line',
+  data:{labels:rh.map(r=>r.date.slice(5)),datasets:[
+    {label:'Price',data:rh.map(r=>r.price),borderColor:'#00d4ff',borderWidth:1.5,pointRadius:0,fill:false,tension:.3,yAxisID:'y'},
+    {label:'Vol%',data:rh.map(r=>+(r.vol*100).toFixed(2)),borderColor:'rgba(255,170,0,.7)',borderWidth:1,pointRadius:0,borderDash:[3,2],fill:false,tension:.3,yAxisID:'y2'},
+    {label:'ADX',data:rh.map(r=>r.adx!=null?+r.adx.toFixed(1):null),borderColor:'rgba(170,102,255,.7)',borderWidth:1,pointRadius:0,borderDash:[2,3],fill:false,tension:.3,yAxisID:'y2',spanGaps:true},
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(30,45,69,.5)'},ticks:{color:'#556688',maxTicksLimit:10,maxRotation:45}},
+      y:{grid:{color:'rgba(30,45,69,.5)'},ticks:{color:'#00d4ff',callback:v=>'¥'+v.toFixed(0)},position:'left'},
+      y2:{grid:{display:false},ticks:{color:'rgba(255,170,0,.7)',callback:v=>v.toFixed(0)},position:'right',min:0,max:50}
+    }
+  }
+});
+
+new Chart(document.getElementById('c1h'),{
+  type:'line',
+  data:{labels:rh.map(r=>r.date.slice(5)),datasets:[
+    {label:'Hurst',data:rh.map(r=>r.hurst!=null?+r.hurst.toFixed(3):null),borderColor:'#aa66ff',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(170,102,255,.1)',tension:.3,spanGaps:true},
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{
+      x:{display:false},
+      y:{grid:{color:'rgba(30,45,69,.5)'},ticks:{color:'#aa66ff'},min:0.3,max:0.8,
+        title:{display:true,text:'Hurst (>0.55=Trend)',color:'#556688',font:{size:10}}}
+    }
+  }
+});
+
+const regimeCounts=Array(5).fill(0);
+rh.forEach(r=>regimeCounts[r.regime]++);
+new Chart(document.getElementById('c1r'),{
+  type:'doughnut',
+  data:{labels:RN,datasets:[{data:regimeCounts,backgroundColor:RC.map(c=>c+'bb'),borderColor:RC,borderWidth:1}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'right',labels:{color:'#8899bb',font:{size:10},boxWidth:10}}}}
+});
+
+// ---- TAB 2 ----
+const MK=[['naive','Naive (RW)','#8899bb'],['ensemble','Ensemble','#00ff88'],['chaos','Chaos k-NN','#aa66ff'],['ar','AR(5) ret','#ffaa00'],['momentum','Momentum','#4488ff']];
+let bth='<tr><th>Model</th><th>RMSE</th><th>vs RW</th><th>MAE</th><th>DA</th><th>DM p</th></tr>';
+MK.forEach(([k,n,c])=>{
+  const s=D.oos[k]; if(!s) return;
+  const rr=s.rmse/D.oos.naive.rmse;
+  const rc=k==='naive'?'var(--text2)':(rr<1?'var(--green)':'var(--red)');
+  const dm=D.dm[k];
+  bth+=`<tr>
+    <td style="color:${c}">${n}</td>
+    <td>${s.rmse.toFixed(4)}</td>
+    <td style="color:${rc}">${k==='naive'?'1.000':rr.toFixed(3)}</td>
+    <td>${s.mae.toFixed(4)}</td>
+    <td>${s.da!=null?(s.da*100).toFixed(1)+'%':'—'}</td>
+    <td style="color:${dm&&dm.p<0.05?'var(--green)':'var(--text3)'}">${dm?dm.p.toFixed(3):'—'}</td>
+  </tr>`;
+});
+document.getElementById('tbt').innerHTML=bth;
+
+let msh='<tr><th>Day</th><th>DA</th><th>MAE</th><th>RMSE</th><th>vs RW</th></tr>';
+for(let s=1;s<=5;s++){
+  const b=D.multistep['d'+s], nv=D.multistep_naive['d'+s];
+  if(!b){continue;}
+  const rr=nv?b.rmse/nv.rmse:null;
+  const daC=b.da==null?'var(--text3)':b.da>0.55?'var(--green)':b.da>0.45?'var(--amber)':'var(--red)';
+  msh+=`<tr>
+    <td style="color:var(--text3)">+${s}d</td>
+    <td style="color:${daC}">${b.da!=null?(b.da*100).toFixed(1)+'%':'—'}</td>
+    <td>${b.mae.toFixed(4)}</td>
+    <td>${b.rmse.toFixed(4)}</td>
+    <td style="color:${rr!=null&&rr<1?'var(--green)':'var(--red)'}">${rr!=null?rr.toFixed(3):'—'}</td>
+  </tr>`;
+}
+document.getElementById('tms').innerHTML=msh;
+
+let cvh='<tr><th>Day</th><th>P10–P90 (80%)</th><th>P25–P75 (50%)</th></tr>';
+for(let s=1;s<=5;s++){
+  const c=D.coverage['d'+s];
+  if(!c){continue;}
+  const ok80=Math.abs(c.cov80-0.8)<=0.1, ok50=Math.abs(c.cov50-0.5)<=0.1;
+  cvh+=`<tr>
+    <td style="color:var(--text3)">+${s}d</td>
+    <td style="color:${ok80?'var(--green)':'var(--amber)'}">${(c.cov80*100).toFixed(0)}%</td>
+    <td style="color:${ok50?'var(--green)':'var(--amber)'}">${(c.cov50*100).toFixed(0)}%</td>
+  </tr>`;
+}
+document.getElementById('tcov').innerHTML=cvh;
+
+const res=D.errors_ens_60||[];
+new Chart(document.getElementById('c2b'),{
+  type:'bar',
+  data:{labels:res.map(r=>r.date.slice(5)),datasets:[
+    {data:res.map(r=>r.e),backgroundColor:res.map(r=>r.e>=0?'rgba(0,255,136,.5)':'rgba(255,68,102,.4)'),borderWidth:0,borderRadius:2}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{x:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#556688',maxTicksLimit:8,maxRotation:45}},
+      y:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#8899bb'},title:{display:true,text:'Error (JPY)',color:'#556688',font:{size:10}}}}
+  }
+});
+
+// ---- TAB 3: PNL ----
+const P=D.pnl;
+if(P){
+  const pData=[
+    {l:'Total PnL',v:(P.total>=0?'+':'')+P.total.toFixed(2)+'¥',s:'per 1 USD notional',c:P.total>=0?'green':'red'},
+    {l:'Sharpe (Ann.)',v:P.sharpe.toFixed(2),s:'cost-adjusted',c:P.sharpe>0?'green':'red'},
+    {l:'Hit Rate',v:P.hit!=null?(P.hit*100).toFixed(1)+'%':'—',s:P.n_trades+' trades / '+P.n_days+' days',c:'blue'},
+    {l:'Max Drawdown',v:P.max_dd.toFixed(2)+'¥',s:'cumulative',c:'amber'},
+  ];
+  document.getElementById('pnlstrip').innerHTML=pData.map(m=>
+    `<div class="mc"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${m.c})">${m.v}</div><div class="mc-s">${m.s}</div></div>`
+  ).join('');
+  let cum=0;
+  const cumData=D.pnl_series.map(r=>{cum+=r.pnl;return +cum.toFixed(3);});
+  new Chart(document.getElementById('c3p'),{
+    type:'line',
+    data:{labels:D.pnl_series.map(r=>r.date.slice(5)),datasets:[
+      {data:cumData,borderColor:'#00ff88',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(0,255,136,.06)',tension:.1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#556688',maxTicksLimit:10}},
+        y:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#8899bb',callback:v=>v.toFixed(1)+'¥'}}}
+    }
+  });
+  document.getElementById('pnlnote').textContent=
+    `前提: 片道コスト${P.cost}円、予測変化が${P.thresh}円未満の日は見送り。スリッパージ・金利差調整は未考慮の簡易検証。`;
+}
+
+// ---- TAB 4 ----
+const wk=[['chaos','Chaos k-NN','purple'],['ar','AR(5) ret','amber'],['momentum','Momentum','blue'],['naive','Naive (RW)','cyan']];
 let wh='';
-wk.forEach(([k,name,c])=>{
+wk.forEach(([k,n,c])=>{
   const pct=Math.round(D.weights[k]*100);
-  wh+=`<div class="opt-row" style="margin-bottom:10px">
-    <div style="font-size:13px;color:var(--${c})">${name}</div>
-    <div style="height:8px;background:var(--bg4);border-radius:4px"><div class="rb" style="width:${pct}%;background:var(--${c}2)"></div></div>
-    <div style="text-align:right;font-size:14px;font-weight:600;color:var(--${c})">${pct}%</div>
+  const rmse=D.oos[k]?D.oos[k].rmse:null;
+  wh+=`<div style="display:grid;grid-template-columns:120px 1fr 50px 110px;gap:10px;align-items:center;margin-bottom:12px">
+    <div style="font-size:11px;color:var(--${c})">${n}</div>
+    <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:var(--${c});opacity:.6;border-radius:3px"></div>
+    </div>
+    <div style="text-align:right;font-size:14px;font-weight:300;color:var(--${c})">${pct}%</div>
+    <div style="text-align:right;font-size:10px;color:var(--text3)">OOS RMSE ${rmse!=null?rmse.toFixed(4):'—'}</div>
   </div>`;
 });
 document.getElementById('wrows').innerHTML=wh;
-// model compare
-const modelVals=[D.chaos_preds[0].mean,D.ar_preds[0],D.mom_preds[0],D.ens[0].mean];
-const modelMin=Math.min(...modelVals);
-const modelMax=Math.max(...modelVals);
-const modelPad=Math.max((modelMax-modelMin)*0.35,0.05);
-const modelYMin=modelMin-modelPad;
-const modelYMax=modelMax+modelPad;
-new Chart(document.getElementById('c3'),{
-  type:'bar',data:{
-    labels:['カオス k-NN','AR(5)','モメンタム','アンサンブル'],
-    datasets:[{data:modelVals,
-      backgroundColor:['rgba(160,112,255,.7)','rgba(240,168,48,.7)','rgba(74,158,255,.7)','rgba(61,220,132,.8)'],
-      borderColor:['#a070ff','#f0a830','#4a9eff','#3ddc84'],borderWidth:1.5,borderRadius:4}]
-  },
+
+const whist=D.weights_history;
+new Chart(document.getElementById('c4w'),{
+  type:'line',
+  data:{labels:whist.map(r=>r.date.slice(5)),datasets:[
+    {label:'Chaos',data:whist.map(r=>r.w[0]),borderColor:'#aa66ff',backgroundColor:'rgba(170,102,255,.3)',fill:true,pointRadius:0,borderWidth:1},
+    {label:'AR',data:whist.map(r=>r.w[1]),borderColor:'#ffaa00',backgroundColor:'rgba(255,170,0,.3)',fill:true,pointRadius:0,borderWidth:1},
+    {label:'Momentum',data:whist.map(r=>r.w[2]),borderColor:'#4488ff',backgroundColor:'rgba(68,136,255,.3)',fill:true,pointRadius:0,borderWidth:1},
+    {label:'Naive',data:whist.map(r=>r.w[3]),borderColor:'#8899bb',backgroundColor:'rgba(136,153,187,.3)',fill:true,pointRadius:0,borderWidth:1},
+  ]},
   options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'¥'+ctx.parsed.y.toFixed(2)}}},
-    scales:{x:{grid:{color:'rgba(42,48,69,.8)'},ticks:{color:'#6a7090'}},y:{grid:{color:'rgba(42,48,69,.8)'},ticks:{color:'#6a7090',callback:v=>'¥'+v.toFixed(2)},min:modelYMin,max:modelYMax}}
+    plugins:{legend:{labels:{color:'#8899bb',font:{size:10},boxWidth:10}}},
+    scales:{x:{grid:{display:false},ticks:{color:'#556688',maxTicksLimit:10}},
+      y:{stacked:true,min:0,max:1,grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#8899bb'}}}
   }
 });
+
+const cfg=D.config;
+document.getElementById('tcfg').innerHTML=
+  '<tr><th>Parameter</th><th>Value</th></tr>'+
+  Object.entries(cfg).map(([k,v])=>`<tr><td style="color:var(--text3)">${k}</td><td>${v}</td></tr>`).join('');
 </script>
 </body>
 </html>
