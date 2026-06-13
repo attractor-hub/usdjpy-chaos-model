@@ -1697,8 +1697,7 @@ def main():
 
     print(f"walk-forwardバックテスト中({EVAL_N + SEL_N + HORIZONS}日)...")
     preds, errs, start = walk_forward(prices, Xe, regimes, offset)
-    ens_pred, ens_err, eval_idxs, w_hist = evaluate_oos(
-        prices, preds, errs, start, regimes=regimes)
+    ens_pred, ens_err, eval_idxs, w_hist = evaluate_oos(prices, preds, errs, start)
     print(f"OOS評価日数: {len(eval_idxs)}")
 
     # OOS統計(1日先) + DM検定
