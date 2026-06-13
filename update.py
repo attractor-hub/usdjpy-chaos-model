@@ -192,18 +192,23 @@ def fetch_cot_jpy(dates):
         cols = list(_df_sample.columns)
         print(f"[DEBUG] cot-reports columns (first 8): {cols[:8]}")
 
-        # 列名を動的に解決（大文字小文字・空白を無視してpartial match）
-        def _find_col(df, *keywords):
-            for kw in keywords:
-                for c in df.columns:
-                    if kw.lower() in c.lower():
-                        return c
-            raise KeyError(f"列が見つかりません: {keywords}")
+        # 列名を動的に解決 — 複数キーワードAND一致（大文字小文字・空白無視）
+        all_cols = list(_df_sample.columns)
+        print(f"[DEBUG] cot-reports 全列数: {len(all_cols)}")
+        print(f"[DEBUG] 全列名: {all_cols}")
 
-        mkt_col  = _find_col(_df_sample, "market and exchange", "market_and_exchange", "market name")
-        date_col = _find_col(_df_sample, "yymmdd", "as of date", "report_date")
-        long_col = _find_col(_df_sample, "noncommercial long", "non_commercial_long", "noncomm_positions_long")
-        shrt_col = _find_col(_df_sample, "noncommercial short", "non_commercial_short", "noncomm_positions_short")
+        def _find_col_and(df, *keywords):
+            """全キーワードが列名に含まれる列を返す（AND検索、大文字小文字無視）"""
+            for c in df.columns:
+                cl = c.lower().replace(" ", "").replace("_", "").replace("-", "")
+                if all(kw.lower().replace(" ", "").replace("_", "") in cl for kw in keywords):
+                    return c
+            raise KeyError(f"列が見つかりません(AND): {keywords}")
+
+        mkt_col  = _find_col_and(_df_sample, "market", "exchange")
+        date_col = _find_col_and(_df_sample, "yymmdd")
+        long_col = _find_col_and(_df_sample, "noncomm", "long")
+        shrt_col = _find_col_and(_df_sample, "noncomm", "short")
         print(f"[DEBUG] 使用列: market='{mkt_col}' date='{date_col}' long='{long_col}' short='{shrt_col}'")
 
         for year in range(start_year, end_year + 1):
