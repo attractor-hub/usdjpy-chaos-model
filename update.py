@@ -165,35 +165,42 @@ def fetch_japan10y(dates):
     from datetime import datetime as _dt
 
     # stooqは日付フィルタなしで全期間CSVを返す(ファイルサイズ小)
-    try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode   = ssl.CERT_NONE
-        url = "https://stooq.com/q/d/l/?s=10yjp.b&i=d"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
-            text = resp.read().decode("utf-8")
-
-        date_val = {}
+    def _parse_yield_csv(text, pct_to_decimal=True):
+        """Date,Open,High,Low,Close,... 形式のCSVをパース → {YYYY/MM/DD: float}
+        ※日本金利はマイナス値あり(BOJ YCC期間)のため val <= 0 では除外しない"""
+        result = {}
         reader = csv.reader(io.StringIO(text))
-        header = next(reader, None)          # Date,Open,High,Low,Close,Volume
+        next(reader, None)
         for row in reader:
             if len(row) < 5:
                 continue
             try:
                 d   = _dt.strptime(row[0].strip(), "%Y-%m-%d")
-                val = float(row[4])          # Close = 利回り(%)
-                if val <= 0:
+                val = float(row[4])
+                if val < -5 or val > 50:   # 明らかな異常値のみ除外(-5%未満や50%超)
                     continue
-                date_val[d.strftime("%Y/%m/%d")] = val * 0.01  # % → 小数
+                result[d.strftime("%Y/%m/%d")] = val * 0.01 if pct_to_decimal else val
             except Exception:
                 continue
+        return result
 
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode   = ssl.CERT_NONE
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    # --- stooq (プライマリ) ---
+    try:
+        url = "https://stooq.com/q/d/l/?s=10yjp.b&i=d"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
+            text = resp.read().decode("utf-8")
+        print(f"[DEBUG] stooq raw first 120 chars: {repr(text[:120])}")
+        date_val = _parse_yield_csv(text)
         if len(date_val) > 100:
             out, last = [], 0.01
             for d in dates:
-                if d in date_val:
-                    last = date_val[d]
+                if d in date_val: last = date_val[d]
                 out.append(last)
             arr = np.array(out)
             print(f"[OK] JP10Y (stooq): {len(date_val)} 件, 最新 {arr[-1]*100:.3f}%")
@@ -203,7 +210,38 @@ def fetch_japan10y(dates):
     except Exception as e:
         print(f"[WARN] JP10Y stooq失敗: {e}")
 
-    # フォールバック: ^JGB → 定数
+    # --- FRED (セカンダリ) — IRLTLT01JPM156N: 日本10年国債利回り月次 ---
+    try:
+        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=IRLTLT01JPM156N"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
+            text = resp.read().decode("utf-8")
+        date_val = {}
+        reader = csv.reader(io.StringIO(text))
+        next(reader, None)
+        for row in reader:
+            if len(row) < 2: continue
+            try:
+                d   = _dt.strptime(row[0].strip(), "%Y-%m-%d")
+                val = float(row[1])
+                if val < -5 or val > 50: continue  # マイナス金利を許容(YCC期間)
+                date_val[d.strftime("%Y/%m/%d")] = val * 0.01
+            except Exception:
+                continue
+        if len(date_val) > 50:
+            out, last = [], 0.005   # 初期フォールバック 0.5%
+            for d in dates:
+                if d in date_val: last = date_val[d]
+                out.append(last)
+            arr = np.array(out)
+            print(f"[OK] JP10Y (FRED月次): {len(date_val)} 件, 最新 {arr[-1]*100:.3f}%")
+            return arr
+        else:
+            print(f"[WARN] JP10Y FRED: データ件数不足 ({len(date_val)}件)")
+    except Exception as e:
+        print(f"[WARN] JP10Y FRED失敗: {e}")
+
+    # --- フォールバック: ^JGB → 定数 ---
     return _fetch_yf_series("^JGB", dates, 1.0, scale=0.01, label="JP10年金利")
 
 def fetch_sp500(dates):
