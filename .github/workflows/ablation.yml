@@ -27,6 +27,10 @@ jobs:
       - name: Run ablation
         run: python update.py --ablation
 
+      - name: Debug output
+        if: always()
+        run: ls -la docs/ && echo "---" && cat docs/ablation.txt || echo "⚠️ docs/ablation.json が存在しません"
+
       - name: Commit results
         run: |
           git config user.name  "github-actions[bot]"
