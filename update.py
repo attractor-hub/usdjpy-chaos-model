@@ -41,6 +41,13 @@ SPREAD_PIPS  = 0.2                        # 実質往復コスト(pips)
 COST_ONEWAY  = SPREAD_PIPS * PIP_JPY / 2  # 片道コスト(円/USD) = 0.001
 NOTIONAL_YEN = 1_000_000                  # PnL想定元本(円)
 PNL_THRESH   = 0.02   # 予測変化がこの閾値(円)未満なら見送り
+
+# --- スワップ(キャリー)モデル ---
+# 理論キャリー = 価格 × (r_USD − r_JPY) / 365 × 暦日数(週末分も自然に加算)
+# 実際の業者スワップとの乖離はヘアカット(常にトレーダーに不利な方向)で近似
+JPY_RATE          = 0.005  # JPY短期金利(無担保コールON相当)。政策変更時はここを更新
+USD_RATE_FALLBACK = 0.04   # ^IRX取得失敗時のフォールバック
+SWAP_HAIRCUT_PIPS = 0.2    # 業者取り分(pips/日、保有中は常に控除)
 MIN_PRICE, MAX_PRICE = 50.0, 400.0  # データ健全性チェック
 
 REGIME_NAMES = ["Low Vol Range", "High Vol Range",
@@ -81,6 +88,31 @@ def fetch_usdjpy_stooq():
     _sanity_check(closes)
     print(f"[OK] stooq: {len(closes)} 件 ({dates[0]} ~ {dates[-1]})")
     return dates, closes
+
+def fetch_usd_rate(dates):
+    """
+    USD短期金利プロキシ(^IRX: 13週T-Bill利回り)を価格系列の日付に前方補完で整列。
+    取得失敗時は定数フォールバック(自動更新を止めない)。
+    """
+    try:
+        import yfinance as yf
+        df = yf.download("^IRX", period="10y", interval="1d",
+                         progress=False, auto_adjust=True)
+        vals = df["Close"].values.flatten()
+        ser = {d.strftime("%Y/%m/%d"): float(v) / 100.0
+               for d, v in zip(df.index, vals) if np.isfinite(v)}
+        if not ser:
+            raise ValueError("empty")
+        out, last = [], USD_RATE_FALLBACK
+        for d in dates:
+            if d in ser:
+                last = ser[d]
+            out.append(last)
+        print(f"[OK] ^IRX: USD短期金利 {out[-1]*100:.2f}%")
+        return np.array(out), "^IRX (13w T-bill)"
+    except Exception as e:
+        print(f"[WARN] ^IRX取得失敗: {e} → 定数{USD_RATE_FALLBACK*100:.1f}%使用")
+        return np.full(len(dates), USD_RATE_FALLBACK), f"constant {USD_RATE_FALLBACK*100:.1f}%"
 
 def _sanity_check(closes):
     """価格レンジと日次変化の健全性チェック(ソース混在・異常値の検出)"""
@@ -447,27 +479,39 @@ def coverage_check(ens_err, eval_idxs, holdout=60):
 # ============================================================
 # 7. スプレッド込みPnLバックテスト
 # ============================================================
-def pnl_backtest(prices, ens_pred, eval_idxs):
+def pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0):
     """
     1日先予測の符号でポジション。想定元本100万円の円建てPnL。
     保有USD数量 = 100万円 / その日の価格。コストはポジション変更時に発生。
+
+    PnL = 価格レッグ + スワップレッグ(理論キャリー − ヘアカット)。
+    スワップは暦日数比例(金→月は3日分 = 週末トリプルスワップ相当)。
+    lag: 執行ラグ(日)。0 = シグナル計算と同じt終値で執行(理想化)、
+         1 = シグナルはt-1終値で計算、執行はt終値(執行ラグ感応度テスト)。
     """
     N = len(prices)
-    pos_prev, pnls, trades, hits, recs = 0, [], 0, [], []
+    pos_prev, recs = 0, []
+    pnls, price_pnls, swap_pnls = [], [], []
+    trades, hits = 0, []
     for idx in eval_idxs:
-        if idx + 1 >= N or np.isnan(ens_pred[0, idx]):
+        s = idx - lag  # シグナル計算日
+        if idx + 1 >= N or s < 0 or np.isnan(ens_pred[0, s]):
             continue
-        edge = ens_pred[0, idx] - prices[idx]
+        edge = ens_pred[0, s] - prices[s]
         pos = 0 if abs(edge) < PNL_THRESH else (1 if edge > 0 else -1)
         units = NOTIONAL_YEN / prices[idx]  # 保有USD数量
         dp = prices[idx + 1] - prices[idx]
         cost = COST_ONEWAY * abs(pos - pos_prev) * units
-        pnl = pos * units * dp - cost
-        pnls.append(pnl)
+        gap_days = max((dates_dt[idx + 1] - dates_dt[idx]).days, 1)
+        theo_day = prices[idx] * (r_usd[idx] - JPY_RATE) / 365.0  # 円/USD/日
+        swap = (pos * theo_day - abs(pos) * SWAP_HAIRCUT_PIPS * PIP_JPY) * units * gap_days
+        ppnl = pos * units * dp - cost
+        pnl = ppnl + swap
+        pnls.append(pnl); price_pnls.append(ppnl); swap_pnls.append(swap)
         if pos != 0:
             trades += 1
             hits.append(1 if pos * dp > 0 else 0)
-        recs.append({"i": idx, "pnl": round(float(pnl), 1)})
+        recs.append({"i": idx, "pnl": float(pnl), "swap": float(swap)})
         pos_prev = pos
     pnls = np.array(pnls)
     if len(pnls) == 0:
@@ -476,6 +520,8 @@ def pnl_backtest(prices, ens_pred, eval_idxs):
     sharpe = float(pnls.mean() / (pnls.std() + 1e-12) * math.sqrt(252))
     summary = {
         "total":     round(float(cum[-1])),
+        "price":     round(float(np.sum(price_pnls))),
+        "swap":      round(float(np.sum(swap_pnls))),
         "sharpe":    round(sharpe, 3),
         "hit":       round(float(np.mean(hits)), 4) if hits else None,
         "n_days":    int(len(pnls)),
@@ -484,6 +530,7 @@ def pnl_backtest(prices, ens_pred, eval_idxs):
         "cost_pips": SPREAD_PIPS,
         "notional":  NOTIONAL_YEN,
         "thresh":    PNL_THRESH,
+        "lag":       lag,
     }
     return summary, recs
 
@@ -660,10 +707,16 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 <!-- TAB 3: PNL -->
 <div class="pn" id="p3">
   <div class="card">
-    <div class="card-t">Cost-Adjusted PnL Simulation &mdash; OOS (1-day signal, &yen;1,000,000 notional)</div>
+    <div class="card-t">Cost &amp; Swap-Adjusted PnL Simulation &mdash; OOS (1-day signal, &yen;1,000,000 notional)</div>
     <div class="mstrip" id="pnlstrip" style="margin-bottom:14px"></div>
     <div class="cw h240"><canvas id="c3p"></canvas></div>
     <div class="note" id="pnlnote"></div>
+  </div>
+  <div class="card">
+    <div class="card-t">Execution Lag Sensitivity &mdash; t&#x7d42;&#x5024;&#x57f7;&#x884c; vs &#x30e9;&#x30b0;1&#x65e5;</div>
+    <table id="tlag"></table>
+    <div class="note">ラグ1日 = シグナルをt-1終値で計算し、執行をt終値まで丸1日遅らせた保守的な検証。
+      ラグなしとの差が小さければ執行タイミングに頑健、ラグ1日で損益が消える場合は執行速度依存のシグナル。</div>
   </div>
 </div>
 
@@ -918,36 +971,54 @@ new Chart(document.getElementById('c2b'),{
 });
 
 // ---- TAB 3: PNL ----
-const P=D.pnl;
+const P=D.pnl, PL=D.pnl_lag1, PC=D.pnl_chart;
 if(P){
   // 円表記: 符号 + ¥ + 3桁区切り (例: +¥12,345 / -¥3,210)
   const fmtY=(v,sign)=>(sign?(v>=0?'+':'-'):(v<0?'-':''))+'¥'+Math.round(Math.abs(v)).toLocaleString('ja-JP');
   const pData=[
     {l:'Total PnL',v:fmtY(P.total,true),s:'per ¥1,000,000 notional',c:P.total>=0?'green':'red'},
-    {l:'Sharpe (Ann.)',v:P.sharpe.toFixed(2),s:'cost-adjusted',c:P.sharpe>0?'green':'red'},
+    {l:'Price PnL',v:fmtY(P.price,true),s:'price leg',c:P.price>=0?'green':'red'},
+    {l:'Swap PnL',v:fmtY(P.swap,true),s:'carry − haircut',c:P.swap>=0?'green':'red'},
+    {l:'Sharpe (Ann.)',v:P.sharpe.toFixed(2),s:'swap & cost adj.',c:P.sharpe>0?'green':'red'},
     {l:'Hit Rate',v:P.hit!=null?(P.hit*100).toFixed(1)+'%':'—',s:P.n_trades+' trades / '+P.n_days+' days',c:'blue'},
     {l:'Max Drawdown',v:fmtY(P.max_dd,false),s:'cumulative (JPY)',c:'amber'},
   ];
   document.getElementById('pnlstrip').innerHTML=pData.map(m=>
     `<div class="mc"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${m.c})">${m.v}</div><div class="mc-s">${m.s}</div></div>`
   ).join('');
-  let cum=0;
-  const cumData=D.pnl_series.map(r=>{cum+=r.pnl;return Math.round(cum);});
   new Chart(document.getElementById('c3p'),{
     type:'line',
-    data:{labels:D.pnl_series.map(r=>r.date.slice(5)),datasets:[
-      {data:cumData,borderColor:'#00ff88',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(0,255,136,.06)',tension:.1}
+    data:{labels:PC.dates.map(d=>d.slice(5)),datasets:[
+      {label:'Total (swap込)',data:PC.cum,borderColor:'#00ff88',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(0,255,136,.06)',tension:.1},
+      {label:'Swap成分',data:PC.cum_swap,borderColor:'#ffaa00',borderWidth:1,borderDash:[4,3],pointRadius:0,fill:false,tension:.1},
+      {label:'執行ラグ1日',data:PC.cum_lag1,borderColor:'#aa66ff',borderWidth:1.2,borderDash:[2,2],pointRadius:0,fill:false,tension:.1,spanGaps:false},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'累積PnL: '+fmtY(ctx.parsed.y,true)}}},
+      plugins:{legend:{labels:{color:'#8899bb',font:{size:10},boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>ctx.parsed.y!=null?ctx.dataset.label+': '+fmtY(ctx.parsed.y,true):''}}},
       scales:{x:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#556688',maxTicksLimit:10}},
         y:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#8899bb',callback:v=>fmtY(v,false)},
           title:{display:true,text:'Cumulative PnL (JPY)',color:'#556688',font:{size:10}}}}
     }
   });
   document.getElementById('pnlnote').textContent=
-    `前提: 想定元本¥1,000,000(保有USD数量=元本÷当日価格)、往復スプレッド${P.cost_pips}pips、`+
-    `予測変化が${P.thresh}円未満の日は見送り。PnLはすべて円建て。スリッページ・スワップ(金利差)は未考慮の簡易検証。`;
+    `前提: 想定元本¥1,000,000(保有USD数量=元本÷当日価格)、往復スプレッド${P.cost_pips}pips。`+
+    `スワップ=理論キャリー(短期金利差・暦日数比例、週末分込み)−ヘアカット0.2pips/日。`+
+    `予測変化が${P.thresh}円未満の日は見送り。PnLはすべて円建て。スリッページは未考慮。`;
+  // 執行ラグ比較表
+  let lh='<tr><th>Execution</th><th>Total PnL</th><th>Price</th><th>Swap</th><th>Sharpe</th><th>Hit</th></tr>';
+  [['t終値(ラグなし)',P],['t+1終値(ラグ1日)',PL]].forEach(([n,S])=>{
+    if(!S) return;
+    lh+=`<tr>
+      <td style="color:var(--text2)">${n}</td>
+      <td style="color:${S.total>=0?'var(--green)':'var(--red)'}">${fmtY(S.total,true)}</td>
+      <td>${fmtY(S.price,true)}</td>
+      <td>${fmtY(S.swap,true)}</td>
+      <td style="color:${S.sharpe>0?'var(--green)':'var(--red)'}">${S.sharpe.toFixed(2)}</td>
+      <td>${S.hit!=null?(S.hit*100).toFixed(1)+'%':'—'}</td>
+    </tr>`;
+  });
+  document.getElementById('tlag').innerHTML=lh;
 }
 
 // ---- TAB 4 ----
@@ -1070,11 +1141,34 @@ def main():
     cq = conformal_quantiles(ens_err, eval_idxs)
     coverage = coverage_check(ens_err, eval_idxs)
 
-    # PnL
-    pnl_summary, pnl_recs = pnl_backtest(prices, ens_pred, eval_idxs)
+    # PnL(スワップ込み、ラグ0=本体 + ラグ1=執行感応度テスト)
+    from datetime import datetime as _dt
+    dates_dt = [_dt.strptime(d, "%Y/%m/%d") for d in dates]
+    r_usd, rate_source = fetch_usd_rate(dates)
+    pnl_summary, pnl_recs = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0)
+    pnl_lag1, pnl_recs_l1 = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=1)
     if pnl_summary:
-        print(f"PnL(OOS, 元本100万円, cost込): total={pnl_summary['total']:+,}円 "
+        print(f"PnL(OOS, 元本100万円, swap/cost込): total={pnl_summary['total']:+,}円 "
+              f"(価格{pnl_summary['price']:+,} / swap{pnl_summary['swap']:+,}) "
               f"Sharpe={pnl_summary['sharpe']:.2f} hit={pnl_summary['hit']}")
+    if pnl_lag1:
+        print(f"PnL(執行ラグ1日): total={pnl_lag1['total']:+,}円 Sharpe={pnl_lag1['sharpe']:.2f}")
+
+    # チャート用累積系列(ラグ0の日付軸に整列、ラグ1は先頭をNone埋め)
+    pnl_chart = {"dates": [], "cum": [], "cum_swap": [], "cum_lag1": []}
+    cum = cum_s = 0.0
+    l1_map = {r["i"]: r["pnl"] for r in pnl_recs_l1}
+    cum_l1, l1_started = 0.0, False
+    for r in pnl_recs:
+        cum += r["pnl"]; cum_s += r["swap"]
+        pnl_chart["dates"].append(dates[r["i"]])
+        pnl_chart["cum"].append(round(cum))
+        pnl_chart["cum_swap"].append(round(cum_s))
+        if r["i"] in l1_map:
+            cum_l1 += l1_map[r["i"]]; l1_started = True
+            pnl_chart["cum_lag1"].append(round(cum_l1))
+        else:
+            pnl_chart["cum_lag1"].append(round(cum_l1) if l1_started else None)
 
     # 本番予測(今日)
     idx = N - 1
@@ -1116,9 +1210,6 @@ def main():
     weights_history = [{"date": dates[r["idx"]], "w": [round(x, 2) for x in r["w"]]}
                        for r in w_hist[-60:]]
 
-    # PnL系列(日付付与)
-    pnl_series = [{"date": dates[r["i"]], "pnl": r["pnl"]} for r in pnl_recs]
-
     regime_history = [
         {"date": dates[i], "price": round(float(prices[i]), 4),
          "regime": int(regimes[i]), "vol": round(float(rv[i]), 6),
@@ -1145,7 +1236,8 @@ def main():
         "multistep_naive": multistep_naive,
         "coverage":        coverage,
         "pnl":             pnl_summary,
-        "pnl_series":      pnl_series,
+        "pnl_lag1":        pnl_lag1,
+        "pnl_chart":       pnl_chart,
         "ens":             ens_today,
         "ar_preds":        [round(v, 4) for v in fc["ar"]],
         "transition_prob": [[round(float(p), 4) for p in row] for row in trans],
@@ -1165,6 +1257,10 @@ def main():
             "intervals": "conformal (OOS residual quantiles)",
             "PnL notional": "¥1,000,000",
             "cost assumption": f"{SPREAD_PIPS} pips round-trip",
+            "swap model": f"carry = price×(r_USD−r_JPY)/365×calendar days − {SWAP_HAIRCUT_PIPS} pips/day haircut",
+            "USD rate source": rate_source,
+            "JPY rate": f"{JPY_RATE*100:.2f}% (constant)",
+            "execution lag test": "signal t-1 close → execute t close",
         },
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
