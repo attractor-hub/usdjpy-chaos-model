@@ -30,7 +30,7 @@ v3.1 追加:
 """
 
 import numpy as np
-import json, os, math
+import json, os, math, zipfile, io
 from datetime import datetime, timezone
 
 # ============================================================
@@ -67,6 +67,16 @@ VIX_SPIKE_Z     = 2.0   # リスクオフ判定: VIX対数zスコア閾値
 VIX_SPIKE_CHG   = 0.25  # リスクオフ判定: VIX 5日対数変化閾値
 MACRO_DIM_SCALE = 0.7   # 埋め込み内の金利/VIX次元のスケール(価格形状を主、マクロを従に)
 MIN_PRICE, MAX_PRICE = 50.0, 400.0  # データ健全性チェック
+
+# --- v3.2: マクロ方向レイヤー (k-NN埋め込みとは独立した2層目) ---
+# k-NNが「いつ入るか」を決める一方、マクロレイヤーは「どちら向きに賭けるか」の確信度を調整。
+# k-NNとマクロが逆行する場合のみポジションを縮小する保守的な設計。
+USE_MACRO_LAYER    = True   # Falseにすると従来通りのサイジング(マクロ無視)
+MACRO_OPPOSE_MULT  = 0.5    # マクロと逆行時のポジション縮小率 (0.5 = 半分)
+MACRO_NEUTRAL_BAND = 0.25   # スコアの中立ゾーン幅 (±以内はサイジング変更なし)
+COT_MOM_WEEKS      = 4      # COTモメンタム算出期間 (週)
+SPREAD_MOM_DAYS    = 20     # 10年債スプレッドモメンタム算出期間 (日)
+MONTHEND_DAYS      = 5      # 月末判定: 月末からN日以内
 
 REGIME_NAMES = ["Low Vol Range", "High Vol Range",
                 "Bull Trend", "Bear Trend", "Unstable"]
@@ -138,6 +148,72 @@ def fetch_usd_rate(dates):
 
 def fetch_vix(dates):
     return _fetch_yf_series("^VIX", dates, VIX_FALLBACK, label="VIX")
+
+def fetch_us10y(dates):
+    """米10年国債利回り (^TNX, %)。スプレッド計算用。"""
+    return _fetch_yf_series("^TNX", dates, 4.5, scale=0.01, label="US10年金利")
+
+def fetch_japan10y(dates):
+    """日本10年国債利回り (^JGB, %)。取得失敗時は1%定数(BOJ YCC後の実勢値)。"""
+    return _fetch_yf_series("^JGB", dates, 1.0, scale=0.01, label="JP10年金利")
+
+def fetch_sp500(dates):
+    """S&P500終値。月末リバランスフロー算出用。"""
+    return _fetch_yf_series("^GSPC", dates, 5000.0, label="S&P500")
+
+def fetch_cot_jpy(dates):
+    """
+    CFTC COT Legacy Futures — CME JPY大口投機筋ネットポジション(枚)。
+    週次(火曜基準、金曜公表)を日次に前方補完。3〜8日のラグあり。
+    取得失敗時はゼロ(中立扱い)で自動更新は止まらない。
+    """
+    import urllib.request, csv
+    from datetime import datetime as _dt
+
+    start_year = int(dates[0][:4]) if dates else 2016
+    end_year   = int(dates[-1][:4]) if dates else 2026
+    weekly = {}
+
+    for year in range(start_year, end_year + 1):
+        url = (f"https://www.cftc.gov/sites/default/files/files/dea/"
+               f"cotarchives/{year}/futures/deacmesf.zip")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = resp.read()
+            zf = zipfile.ZipFile(io.BytesIO(data))
+            text = zf.open(zf.namelist()[0]).read().decode("latin-1")
+            count = 0
+            for row in csv.reader(io.StringIO(text)):
+                if len(row) < 5 or "JAPANESE YEN" not in row[0].upper():
+                    continue
+                try:
+                    ds = row[1].strip()          # YYMMDD形式
+                    yr = int(ds[:2]); yr = (2000 + yr if yr < 50 else 1900 + yr)
+                    d  = _dt(yr, int(ds[2:4]), int(ds[4:6]))
+                    key = d.strftime("%Y/%m/%d")
+                    net = float(row[3].replace(",", "")) - float(row[4].replace(",", ""))
+                    weekly[key] = net
+                    count += 1
+                except Exception:
+                    continue
+            if count:
+                print(f"[OK] COT {year}: {count} 件")
+        except Exception as e:
+            print(f"[WARN] COT {year}: {e}")
+
+    if not weekly:
+        print("[WARN] COT全取得失敗 → ゼロ補完(中立)")
+        return np.zeros(len(dates)), "fallback(0)"
+
+    out, last = [], 0.0
+    for d in dates:
+        if d in weekly:
+            last = weekly[d]
+        out.append(last)
+    net_arr = np.array(out)
+    print(f"[OK] COT JPY ネット: 最新 {net_arr[-1]:,.0f} 枚")
+    return net_arr, "CFTC"
 
 def _sanity_check(closes):
     """価格レンジと日次変化の健全性チェック(ソース混在・異常値の検出)"""
@@ -524,9 +600,71 @@ def coverage_check(ens_err, eval_idxs, holdout=60):
     return out
 
 # ============================================================
-# 7. スプレッド込みPnLバックテスト
+# 7. マクロ方向レイヤー (v3.2)
 # ============================================================
-def pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0):
+def build_macro_signal(dates, us10y, jp10y, sp500, cot_net):
+    """
+    3因子を合成して日次方向スコア [-1, +1] を返す。すべて因果。
+
+      +1 = USD/JPY 上昇バイアス  /  -1 = USD/JPY 下落バイアス
+
+    因子:
+      1. 米日10年債スプレッドモメンタム (40%)
+         スプレッド拡大 → 米国利回り優位 → USD/JPY 上昇 → +1
+      2. COT大口投機筋JPYネットポジション変化 (35%)
+         JPYネットロング増 → 円高期待 → USD/JPY 下落 → -1
+      3. 月末リバランスフロー (25%)
+         S&P500月間上昇 × 月末 → 日本機関がドル売り → USD/JPY 下落 → -1
+    """
+    import calendar as _cal
+    from datetime import datetime as _dt
+
+    N = len(dates)
+
+    # --- 1. 米日10年債スプレッドモメンタム ---
+    spread = us10y - jp10y
+    spread_mom = np.zeros(N)
+    for i in range(SPREAD_MOM_DAYS, N):
+        spread_mom[i] = spread[i] - spread[i - SPREAD_MOM_DAYS]
+    spread_sig = rolling_zscore(spread_mom)   # 因果zスコア化
+
+    # --- 2. COT大口投機筋JPYポジション変化 ---
+    cot_win = COT_MOM_WEEKS * 5               # 4週 ≒ 20営業日
+    cot_mom = np.zeros(N)
+    for i in range(cot_win, N):
+        cot_mom[i] = cot_net[i] - cot_net[i - cot_win]
+    # JPYネットロング増 → 円高 → USD/JPY下落 → -1
+    cot_sig = -rolling_zscore(cot_mom)
+
+    # --- 3. 月末リバランスフロー ---
+    dates_dt = [_dt.strptime(d, "%Y/%m/%d") for d in dates]
+    monthend_sig = np.zeros(N)
+    for i in range(20, N):
+        d = dates_dt[i]
+        last_day = _cal.monthrange(d.year, d.month)[1]
+        if (last_day - d.day) > MONTHEND_DAYS:
+            continue
+        # 当月初からのS&P500リターン(因果: i時点以前のみ)
+        sp_start = sp500[i]
+        for j in range(i - 1, max(0, i - 25), -1):
+            if dates_dt[j].month != d.month or dates_dt[j].year != d.year:
+                sp_start = sp500[j + 1]
+                break
+        sp_ret = (sp500[i] - sp_start) / (sp_start + 1e-8)
+        # 米株上昇 → 日本機関のドル売り圧力 → USD/JPY 下落 → -1
+        monthend_sig[i] = -float(np.clip(sp_ret * 10, -1.0, 1.0))
+
+    # --- 加重合成 & soft-clip [-1, +1] ---
+    composite  = 0.40 * spread_sig + 0.35 * cot_sig + 0.25 * monthend_sig
+    macro_score = np.tanh(rolling_zscore(composite) * 0.7)
+
+    return macro_score, spread_sig, cot_sig, monthend_sig
+
+# ============================================================
+# 8. スプレッド込みPnLバックテスト
+# ============================================================
+def pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0,
+                 macro_signal=None):
     """
     1日先予測の符号でポジション。想定元本100万円の円建てPnL。
     保有USD数量 = 100万円 / その日の価格。コストはポジション変更時に発生。
@@ -544,8 +682,17 @@ def pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0):
         s = idx - lag  # シグナル計算日
         if idx + 1 >= N or s < 0 or np.isnan(ens_pred[0, s]):
             continue
-        edge = ens_pred[0, s] - prices[s]
-        pos = 0 if abs(edge) < PNL_THRESH else (1 if edge > 0 else -1)
+        edge    = ens_pred[0, s] - prices[s]
+        pos_raw = 0 if abs(edge) < PNL_THRESH else (1 if edge > 0 else -1)
+        # マクロ方向レイヤー: 中立ゾーン外でk-NNと逆行する場合のみ縮小
+        if macro_signal is not None and USE_MACRO_LAYER and pos_raw != 0:
+            ms = macro_signal[s]
+            if abs(ms) > MACRO_NEUTRAL_BAND and ms * pos_raw < 0:
+                pos = pos_raw * MACRO_OPPOSE_MULT
+            else:
+                pos = float(pos_raw)
+        else:
+            pos = float(pos_raw)
         units = NOTIONAL_YEN / prices[idx]  # 保有USD数量
         dp = prices[idx + 1] - prices[idx]
         cost = COST_ONEWAY * abs(pos - pos_prev) * units
@@ -558,7 +705,8 @@ def pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0):
         if pos != 0:
             trades += 1
             hits.append(1 if pos * dp > 0 else 0)
-        recs.append({"i": idx, "pnl": float(pnl), "swap": float(swap)})
+        recs.append({"i": idx, "pnl": float(pnl), "swap": float(swap),
+                     "macro": round(float(macro_signal[s]), 3) if macro_signal is not None else 0})
         pos_prev = pos
     pnls = np.array(pnls)
     if len(pnls) == 0:
@@ -754,6 +902,12 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 
 <!-- TAB 3: PNL -->
 <div class="pn" id="p3">
+  <div class="card">
+    <div class="card-t">Macro Direction Layer &mdash; v3.2 (米日10年債・COT・月末フロー)</div>
+    <div class="mstrip" id="macrostrip" style="margin-bottom:14px"></div>
+    <div class="cw h160"><canvas id="c3m"></canvas></div>
+    <div class="note" id="macronote"></div>
+  </div>
   <div class="card">
     <div class="card-t">Cost &amp; Swap-Adjusted PnL Simulation &mdash; OOS (1-day signal, &yen;1,000,000 notional)</div>
     <div class="mstrip" id="pnlstrip" style="margin-bottom:14px"></div>
@@ -1031,6 +1185,44 @@ new Chart(document.getElementById('c2b'),{
   }
 });
 
+// ---- TAB 3: MACRO LAYER ----
+const ML = D.macro_layer;
+if(ML){
+  const sc = ML.current_score;
+  const dir = sc > ML.neutral_band ? 'USD/JPY 上昇バイアス' : sc < -ML.neutral_band ? 'USD/JPY 下落バイアス' : '中立ゾーン';
+  const col = sc > ML.neutral_band ? 'green' : sc < -ML.neutral_band ? 'red' : 'amber';
+  const mItems=[
+    {l:'Macro Score',   v: sc.toFixed(2),                s: dir,                   c: col},
+    {l:'10Y Spread Mom',v: ML.spread_sig.toFixed(2),     s: `${SPREAD_MOM_DAYS}日モメンタム z-score`,c: ML.spread_sig>=0?'green':'red'},
+    {l:'COT Signal',    v: ML.cot_sig.toFixed(2),        s: 'JPYネット変化 (4週)',  c: ML.cot_sig>=0?'green':'red'},
+    {l:'Month-end Flow',v: ML.monthend_sig.toFixed(2),   s: '月末リバランス圧力',   c: ML.monthend_sig>=0?'green':'red'},
+  ];
+  const SPREAD_MOM_DAYS=20;
+  document.getElementById('macrostrip').innerHTML=mItems.map(m=>
+    `<div class="mc"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${m.c})">${m.v}</div><div class="mc-s">${m.s}</div></div>`
+  ).join('');
+  new Chart(document.getElementById('c3m'),{
+    type:'line',
+    data:{labels:ML.history_dates.map(d=>d.slice(5)),datasets:[
+      {label:'Macro Score',  data:ML.history_score,  borderColor:'#00d4ff',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(0,212,255,.06)',tension:.2},
+      {label:'10Y Spread',   data:ML.history_spread, borderColor:'#00ff88',borderWidth:1,borderDash:[3,2],pointRadius:0,fill:false,tension:.2},
+      {label:'COT Signal',   data:ML.history_cot,    borderColor:'#ffaa00',borderWidth:1,borderDash:[3,2],pointRadius:0,fill:false,tension:.2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8899bb',font:{size:10},boxWidth:10}}},
+      scales:{
+        x:{grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#556688',maxTicksLimit:10}},
+        y:{min:-1.2,max:1.2,grid:{color:'rgba(30,45,69,.3)'},ticks:{color:'#8899bb'},
+          title:{display:true,text:'Score',color:'#556688',font:{size:10}}}
+      }
+    }
+  });
+  document.getElementById('macronote').textContent=
+    `マクロスコアが中立ゾーン(±${ML.neutral_band})外でk-NNシグナルと逆行する場合、ポジションを${ML.oppose_mult*100}%に縮小。`+
+    ` 因子: 米日10年債スプレッドモメンタム40% + COT大口投機筋JPYポジション変化35% + 月末リバランスフロー25%。`+
+    ` データ: US10Y=${ML.us10y_source} JP10Y=${ML.jp10y_source} COT=${ML.cot_source}`;
+}
+
 // ---- TAB 3: PNL ----
 const P=D.pnl, PL=D.pnl_lag1, PC=D.pnl_chart;
 if(P){
@@ -1172,7 +1364,17 @@ def main():
 
     # 外部マクロ系列(金利・VIX)。失敗時フォールバックで自動更新は止まらない
     r_usd, rate_source = fetch_usd_rate(dates)
-    vix, vix_source = fetch_vix(dates)
+    vix, vix_source    = fetch_vix(dates)
+
+    # v3.2 マクロ方向レイヤー用データ
+    us10y, us10y_src = fetch_us10y(dates)
+    jp10y, jp10y_src = fetch_japan10y(dates)
+    sp500, sp500_src = fetch_sp500(dates)
+    cot_net, cot_src = fetch_cot_jpy(dates)
+    macro_score, spread_sig, cot_sig, monthend_sig = build_macro_signal(
+        dates, us10y, jp10y, sp500, cot_net)
+    print(f"マクロスコア(現在): {macro_score[-1]:.3f} | "
+          f"10Y差: {spread_sig[-1]:.2f} | COT: {cot_sig[-1]:.2f} | 月末: {monthend_sig[-1]:.2f}")
 
     print("特徴量計算中(全て因果)...")
     rv  = rolling_vol(prices)
@@ -1248,8 +1450,10 @@ def main():
     # PnL(スワップ込み、ラグ0=本体 + ラグ1=執行感応度テスト)
     from datetime import datetime as _dt
     dates_dt = [_dt.strptime(d, "%Y/%m/%d") for d in dates]
-    pnl_summary, pnl_recs = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0)
-    pnl_lag1, pnl_recs_l1 = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=1)
+    pnl_summary, pnl_recs   = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0,
+                                             macro_signal=macro_score)
+    pnl_lag1,   pnl_recs_l1 = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=1,
+                                             macro_signal=macro_score)
     if pnl_summary:
         print(f"PnL(OOS, 元本100万円, swap/cost込): total={pnl_summary['total']:+,}円 "
               f"(価格{pnl_summary['price']:+,} / swap{pnl_summary['swap']:+,}) "
@@ -1367,6 +1571,21 @@ def main():
             "execution lag test": "signal t-1 close → execute t close",
         },
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "macro_layer": {
+            "current_score":  round(float(macro_score[-1]), 4),
+            "spread_sig":     round(float(spread_sig[-1]),  4),
+            "cot_sig":        round(float(cot_sig[-1]),     4),
+            "monthend_sig":   round(float(monthend_sig[-1]),4),
+            "neutral_band":   MACRO_NEUTRAL_BAND,
+            "oppose_mult":    MACRO_OPPOSE_MULT,
+            "history_dates":  [dates[i] for i in range(max(0, N - 60), N)],
+            "history_score":  [round(float(macro_score[i]), 4) for i in range(max(0, N - 60), N)],
+            "history_spread": [round(float(spread_sig[i]),  4) for i in range(max(0, N - 60), N)],
+            "history_cot":    [round(float(cot_sig[i]),     4) for i in range(max(0, N - 60), N)],
+            "us10y_source":   us10y_src,
+            "jp10y_source":   jp10y_src,
+            "cot_source":     cot_src,
+        },
     }
 
     os.makedirs("docs", exist_ok=True)
