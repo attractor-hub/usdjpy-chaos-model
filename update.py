@@ -1551,14 +1551,34 @@ fetch('ablation.json').then(r=>{if(!r.ok)throw 0;return r.json();}).then(A=>{
 </body>
 </html>"""
 
-def generate_html(D, source):
+def generate_html(D, source, public=False):
+    """
+    public=False: 全情報含む通常版 (index.html)
+    public=True:  Configuration カードとconfigキーを除いた外部公開版 (index_public.html)
+    """
+    import copy
+    payload = D if not public else {k: v for k, v in D.items() if k != "config"}
+
     html = HTML_TEMPLATE
-    html = html.replace("__DATA__", json.dumps(D, ensure_ascii=False, separators=(',', ':')))
+    html = html.replace("__DATA__", json.dumps(payload, ensure_ascii=False, separators=(',', ':')))
     html = html.replace("__REGIME_NAMES__", json.dumps(REGIME_NAMES))
     html = html.replace("__GENERATED_AT__", D["generated_at"])
     html = html.replace("__SOURCE__", source)
     html = html.replace("__EVAL_N__", str(EVAL_N))
     html = html.replace("__SEL_N__", str(SEL_N))
+
+    if public:
+        # Configuration カード本体を除去
+        html = html.replace(
+            '<div class="card">\n    <div class="card-t">Configuration</div>\n    <table id="tcfg"></table>\n  </div>',
+            ''
+        )
+        # ConfigurationカードをレンダリングするJSを除去
+        html = html.replace(
+            "const cfg=D.config;\ndocument.getElementById('tcfg').innerHTML=\n  '<tr><th>Parameter</th><th>Value</th></tr>'+\n  Object.entries(cfg).map(([k,v])=>`<tr><td style=\"color:var(--text3)\">${k}</td><td>${v}</td></tr>`).join('');",
+            "// Configuration hidden in public build"
+        )
+
     return html
 
 # ============================================================
@@ -1798,10 +1818,19 @@ def main():
     }
 
     os.makedirs("docs", exist_ok=True)
-    html = generate_html(payload, source)
+
+    # 通常版 (全パラメーター含む)
+    html = generate_html(payload, source, public=False)
     with open("docs/index.html", "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[OK] docs/index.html {len(html):,} bytes")
+
+    # 外部公開版 (Configuration非表示)
+    html_pub = generate_html(payload, source, public=True)
+    with open("docs/index_public.html", "w", encoding="utf-8") as f:
+        f.write(html_pub)
+    print(f"[OK] docs/index_public.html {len(html_pub):,} bytes")
+
     print("=== Done ===")
 
 # ============================================================
