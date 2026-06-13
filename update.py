@@ -676,6 +676,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
   <button class="tab" onclick="sw(2)">Backtest (OOS)</button>
   <button class="tab" onclick="sw(3)">PnL</button>
   <button class="tab" onclick="sw(4)">Optimization</button>
+  <button class="tab" onclick="sw(5)">Ablation</button>
 </div>
 
 <!-- TAB 0: FORECAST -->
@@ -784,6 +785,19 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
   <div class="card">
     <div class="card-t">Configuration</div>
     <table id="tcfg"></table>
+  </div>
+</div>
+
+<!-- TAB 5: ABLATION -->
+<div class="pn" id="p5">
+  <div class="card">
+    <div class="card-t">Factor Ablation &mdash; &plusmn;EWMA &times; &plusmn;MACRO (same data, same OOS window)</div>
+    <div id="abbody"><div class="note">読み込み中...</div></div>
+    <div class="note">
+      生成方法: <span style="color:var(--cyan)">python update.py --ablation</span> を実行して docs/ をコミット。
+      日次自動更新では再生成されません(実行時点のスナップショット)。<br>
+      注意: 同一窓での比較は要因診断が目的。最も成績の良い構成を選ぶ行為はこの評価窓への過剰適合(多重検定)になります。採用判断はフォワード評価で。
+    </div>
   </div>
 </div>
 
@@ -1105,6 +1119,33 @@ const cfg=D.config;
 document.getElementById('tcfg').innerHTML=
   '<tr><th>Parameter</th><th>Value</th></tr>'+
   Object.entries(cfg).map(([k,v])=>`<tr><td style="color:var(--text3)">${k}</td><td>${v}</td></tr>`).join('');
+
+// ---- TAB 5: ABLATION (ablation.json があれば表示) ----
+fetch('ablation.json').then(r=>{if(!r.ok)throw 0;return r.json();}).then(A=>{
+  const fY=v=>(v>=0?'+':'-')+'¥'+Math.round(Math.abs(v)).toLocaleString('ja-JP');
+  let h=`<div class="note" style="margin:0 0 10px">実行日時: ${A.generated_at} | データ: ${A.source} ${A.period} | OOS評価 ${A.eval_n}日</div>`;
+  h+='<table><tr><th>構成</th><th>RMSE比</th><th>DM p</th><th>DA</th><th>PnL(lag0)</th><th>Sharpe</th><th>MaxDD</th><th>Hit</th><th>取引</th><th>PnL(lag1)</th><th>Shp(l1)</th></tr>';
+  A.rows.forEach(r=>{
+    h+=`<tr>
+      <td style="color:var(--text2);font-size:11px">${r.name}</td>
+      <td style="color:${r.rmse_ratio<1?'var(--green)':'var(--red)'}">${r.rmse_ratio.toFixed(4)}</td>
+      <td style="color:${r.dm_p!=null&&r.dm_p<0.05?'var(--green)':'var(--text3)'}">${r.dm_p!=null?r.dm_p.toFixed(3):'—'}</td>
+      <td>${r.da!=null?(r.da*100).toFixed(1)+'%':'—'}</td>
+      <td style="color:${r.pnl0>=0?'var(--green)':'var(--red)'}">${fY(r.pnl0)}</td>
+      <td style="color:${r.sharpe0>0?'var(--green)':'var(--red)'}">${r.sharpe0.toFixed(2)}</td>
+      <td>¥${Math.round(r.maxdd).toLocaleString('ja-JP')}</td>
+      <td>${r.hit!=null?(r.hit*100).toFixed(1)+'%':'—'}</td>
+      <td>${r.trades}</td>
+      <td style="color:${r.pnl1>=0?'var(--green)':'var(--red)'}">${fY(r.pnl1)}</td>
+      <td style="color:${r.sharpe1>0?'var(--green)':'var(--red)'}">${r.sharpe1.toFixed(2)}</td>
+    </tr>`;
+  });
+  h+='</table>';
+  document.getElementById('abbody').innerHTML=h;
+}).catch(()=>{
+  document.getElementById('abbody').innerHTML=
+    '<div class="note">ablation結果がまだありません。<span style="color:var(--cyan)">python update.py --ablation</span> を実行し、docs/ablation.json をコミットすると、ここに比較表が表示されます。</div>';
+});
 </script>
 </body>
 </html>"""
@@ -1428,7 +1469,17 @@ def run_ablation():
     os.makedirs("docs", exist_ok=True)
     with open("docs/ablation.txt", "w", encoding="utf-8") as f:
         f.write(report + "\n")
-    print("[OK] docs/ablation.txt に保存")
+    # ダッシュボードのAblationタブが読むJSON
+    with open("docs/ablation.json", "w", encoding="utf-8") as f:
+        json.dump({
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "source": source,
+            "period": f"{dates[0]} ~ {dates[-1]}",
+            "eval_n": EVAL_N,
+            "rows": [{k: (round(v, 4) if isinstance(v, float) else v)
+                      for k, v in r.items()} for r in rows],
+        }, f, ensure_ascii=False)
+    print("[OK] docs/ablation.txt / docs/ablation.json に保存")
 
 if __name__ == "__main__":
     import sys
