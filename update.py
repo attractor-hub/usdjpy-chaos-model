@@ -57,6 +57,10 @@ USD_RATE_FALLBACK = 0.04   # ^IRX取得失敗時のフォールバック
 SWAP_HAIRCUT_PIPS = 0.2    # 業者取り分(pips/日、保有中は常に控除)
 
 # --- v3.1: 外部マクロ特徴量 + 指数加重重み選択 ---
+# ablationトグル: `python update.py --ablation` で4通り(±EWMA × ±MACRO)を
+# 同一データ・同一評価窓で一括比較し、要因分解する
+USE_EWMA        = True  # False = v3.0の均等加重に戻す
+USE_MACRO       = True  # False = 金利/VIX特徴量とリスクオフ判定を無効化(v3.0相当)
 EWMA_HALFLIFE   = 60    # 重み選択窓の指数減衰半減期(日)。直近誤差ほど重視
 VIX_FALLBACK    = 20.0  # ^VIX取得失敗時のフォールバック(特徴量はゼロ化され無害)
 VIX_SPIKE_Z     = 2.0   # リスクオフ判定: VIX対数zスコア閾値
@@ -418,9 +422,12 @@ def select_weights(errs, idx, sel_n=SEL_N):
     n = win.shape[1]
     if n < 30:
         return np.array([0.0, 0.0, 0.0, 1.0]), None
-    ages = np.arange(n - 1, -1, -1)            # 列は古→新、最新の age=0
-    decay = 0.5 ** (ages / EWMA_HALFLIFE)
-    decay /= decay.sum()
+    if USE_EWMA:
+        ages = np.arange(n - 1, -1, -1)        # 列は古→新、最新の age=0
+        decay = 0.5 ** (ages / EWMA_HALFLIFE)
+        decay /= decay.sum()
+    else:
+        decay = np.full(n, 1.0 / n)            # v3.0の均等加重
     comb_err = COMBOS @ win
     rmse = np.sqrt(((comb_err ** 2) * decay).sum(axis=1))
     i = int(np.argmin(rmse))
@@ -1139,7 +1146,8 @@ def main():
     risk_off = (vz > VIX_SPIKE_Z) | (vix_chg5 > VIX_SPIKE_CHG)
     print(f"リスクオフ日数(VIXスパイク): {int(risk_off.sum())} / {N}")
 
-    regimes, vol_med = classify_regime(rv, adx, pdi, mdi, hurst, risk_off=risk_off)
+    regimes, vol_med = classify_regime(rv, adx, pdi, mdi, hurst,
+                                       risk_off=risk_off if USE_MACRO else None)
     trans = calc_transition_prob(regimes)
 
     pn = rolling_zscore(prices)
@@ -1147,8 +1155,10 @@ def main():
     vn = rolling_zscore(rv)
     rn = rolling_zscore(r_usd - JPY_RATE)  # 金利差(USDキャリーの源泉)の因果zスコア
     tau = estimate_tau(pn)
-    Xe, offset = build_embedding(pn, mn, vn, tau, extra=[rn, vz])
-    print(f"τ={tau} (ACFゼロ交差) | 埋め込み次元={Xe.shape[1]} (5 + 金利差 + VIX) | offset={offset}")
+    Xe, offset = build_embedding(pn, mn, vn, tau,
+                                 extra=[rn, vz] if USE_MACRO else None)
+    print(f"τ={tau} (ACFゼロ交差) | 埋め込み次元={Xe.shape[1]} | "
+          f"EWMA={'on' if USE_EWMA else 'off'} MACRO={'on' if USE_MACRO else 'off'} | offset={offset}")
 
     cur_r = int(regimes[-1])
     print(f"Regime: {REGIME_NAMES[cur_r]} | Vol: {rv[-1]*100:.2f}% | "
@@ -1325,5 +1335,104 @@ def main():
     print(f"[OK] docs/index.html {len(html):,} bytes")
     print("=== Done ===")
 
+# ============================================================
+# 10. Ablation(要因分解)モード
+# ============================================================
+def run_ablation():
+    """
+    ±EWMA × ±MACRO の4通りを同一データ・同一評価窓で一括比較。
+    使い方: python update.py --ablation
+    注意: これは「どの変更が差を生んだか」の診断であり、
+          成績の良い構成を選ぶための多重検定ではない。
+          採用判断は事前に決めたルール(フォワード評価)に従うこと。
+    """
+    global USE_EWMA, USE_MACRO
+    print("=== ABLATION: ±EWMA × ±MACRO(同一データ・同一評価窓)===")
+    dates, prices, source = fetch_usdjpy()
+    r_usd, _ = fetch_usd_rate(dates)
+    vix, _   = fetch_vix(dates)
+
+    rv  = rolling_vol(prices)
+    adx, pdi, mdi = calc_adx(prices)
+    hurst = calc_hurst(prices)
+    mom   = calc_momentum(prices)
+    log_vix = np.log(np.maximum(vix, 1e-6))
+    vz = rolling_zscore(log_vix)
+    vix_chg5 = np.concatenate([np.zeros(5), log_vix[5:] - log_vix[:-5]])
+    risk_off = (vz > VIX_SPIKE_Z) | (vix_chg5 > VIX_SPIKE_CHG)
+    pn = rolling_zscore(prices)
+    mn = rolling_zscore(mom)
+    vn = rolling_zscore(rv)
+    rn = rolling_zscore(r_usd - JPY_RATE)
+    tau = estimate_tau(pn)
+    from datetime import datetime as _dt
+    dates_dt = [_dt.strptime(d, "%Y/%m/%d") for d in dates]
+
+    combos = [
+        ("v3.0相当 (EWMA:off MACRO:off)", False, False),
+        ("EWMAのみ  (EWMA:on  MACRO:off)", True,  False),
+        ("MACROのみ (EWMA:off MACRO:on )", False, True),
+        ("v3.1     (EWMA:on  MACRO:on )", True,  True),
+    ]
+    orig = (USE_EWMA, USE_MACRO)
+    rows = []
+    for name, ue, um in combos:
+        USE_EWMA, USE_MACRO = ue, um
+        regimes, _ = classify_regime(rv, adx, pdi, mdi, hurst,
+                                     risk_off=risk_off if um else None)
+        Xe, offset = build_embedding(pn, mn, vn, tau,
+                                     extra=[rn, vz] if um else None)
+        preds, errs, start = walk_forward(prices, Xe, regimes, offset)
+        ens_pred, ens_err, eval_idxs, _ = evaluate_oos(prices, preds, errs, start)
+        st = _stats_at(ens_err[0], ens_pred[0], prices, eval_idxs)
+        sn = _stats_at(errs["naive"][0], preds["naive"][0], prices, eval_idxs)
+        e_e = np.array([ens_err[0, i] for i in eval_idxs])
+        e_n = np.array([errs["naive"][0, i] for i in eval_idxs])
+        _, dm_p = dm_test(e_e, e_n)
+        p0, _ = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0)
+        p1, _ = pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=1)
+        rows.append({
+            "name": name,
+            "rmse_ratio": st["rmse"] / sn["rmse"],
+            "dm_p": dm_p,
+            "da": st["da"],
+            "pnl0": p0["total"] if p0 else None,
+            "sharpe0": p0["sharpe"] if p0 else None,
+            "maxdd": p0["max_dd"] if p0 else None,
+            "hit": p0["hit"] if p0 else None,
+            "trades": p0["n_trades"] if p0 else None,
+            "pnl1": p1["total"] if p1 else None,
+            "sharpe1": p1["sharpe"] if p1 else None,
+        })
+    USE_EWMA, USE_MACRO = orig
+
+    hdr = (f"{'構成':<32} {'RMSE比':>7} {'DM_p':>6} {'DA':>6} "
+           f"{'PnL(lag0)':>11} {'Sharpe':>7} {'MaxDD':>9} {'Hit':>6} {'取引':>4} "
+           f"{'PnL(lag1)':>11} {'Shp(l1)':>7}")
+    lines = [f"データ: {source} {dates[0]}~{dates[-1]} | OOS評価 {EVAL_N}日 | "
+             f"生成 {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}", "", hdr,
+             "-" * len(hdr)]
+    for r in rows:
+        lines.append(
+            f"{r['name']:<32} {r['rmse_ratio']:>7.4f} {r['dm_p']:>6.3f} "
+            f"{(r['da']*100 if r['da'] is not None else 0):>5.1f}% "
+            f"{r['pnl0']:>+11,} {r['sharpe0']:>7.2f} {r['maxdd']:>9,} "
+            f"{(r['hit']*100 if r['hit'] is not None else 0):>5.1f}% {r['trades']:>4} "
+            f"{r['pnl1']:>+11,} {r['sharpe1']:>7.2f}")
+    lines += ["",
+        "読み方: EWMA行とMACRO行を v3.0相当 と比べ、どちらが v3.1 との差を説明するか確認。",
+        "注意: 同一窓での比較は要因診断が目的。最も成績の良い構成を選ぶ行為は",
+        "      この250日窓への過剰適合(多重検定)になる。採用判断はフォワードで。"]
+    report = "\n".join(lines)
+    print(report)
+    os.makedirs("docs", exist_ok=True)
+    with open("docs/ablation.txt", "w", encoding="utf-8") as f:
+        f.write(report + "\n")
+    print("[OK] docs/ablation.txt に保存")
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--ablation" in sys.argv:
+        run_ablation()
+    else:
+        main()
