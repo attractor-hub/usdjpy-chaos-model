@@ -22,7 +22,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install numpy yfinance
+        run: pip install numpy yfinance pandas cot-reports
 
       - name: Run ablation
         run: python update.py --ablation
