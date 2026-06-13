@@ -905,7 +905,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
   <div class="card">
     <div class="card-t">Macro Direction Layer &mdash; v3.2 (米日10年債・COT・月末フロー)</div>
     <div class="mstrip" id="macrostrip" style="margin-bottom:14px"></div>
-    <div class="cw h160"><canvas id="c3m"></canvas></div>
+    <div class="cw h260"><canvas id="c3m"></canvas></div>
     <div class="note" id="macronote"></div>
   </div>
   <div class="card">
