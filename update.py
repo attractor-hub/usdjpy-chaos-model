@@ -95,11 +95,11 @@ AR_ORDER      = 5      # AR次数
 # --- v3.3: Hurstベースポジションサイジング ---
 # Hurst高 → トレンド持続性あり → 同方向でサイズ増
 # Hurst低 → 確信度低/平均回帰的 → サイズ縮小（逆張りはしない）
-USE_HURST_SIZING  = True  # True = Hurstスケーリング有効。Falseで従来通り
+USE_HURST_SIZING  = False  # True = Hurstスケーリング有効。Falseで従来通り
 HURST_HIGH        = 0.55   # 以上: サイズ増（トレンド相場）
 HURST_LOW         = 0.45   # 未満: サイズ縮小（低確信度）
 HURST_HIGH_MULT   = 1.5    # トレンド相場のポジション倍率
-HURST_LOW_MULT    = 1   # 低確信度のポジション倍率（マイナス=逆張り）
+HURST_LOW_MULT    = -0.5   # 低確信度のポジション倍率（マイナス=逆張り）
 
 REGIME_NAMES = ["Low Vol Range", "High Vol Range",
                 "Bull Trend", "Bear Trend", "Unstable"]
@@ -1356,6 +1356,7 @@ const p25=[...nPad,D.last_price,...D.ens.map(p=>p.p25)];
 const p75=[...nPad,D.last_price,...D.ens.map(p=>p.p75)];
 const p90=[...nPad,D.last_price,...D.ens.map(p=>p.p90)];
 const arM=[...nPad,D.last_price,...D.ar_preds];
+const chaosM=[...nPad,D.last_price,...D.chaos_preds];
 const allVals=[...lp,...D.ens.map(p=>p.p10),...D.ens.map(p=>p.p90)].filter(v=>v!=null);
 const ymin=Math.min(...allVals)-0.5, ymax=Math.max(...allVals)+0.5;
 
@@ -1368,6 +1369,7 @@ new Chart(document.getElementById('c0'),{
     {data:p10,borderWidth:0,pointRadius:0,fill:false,spanGaps:true},
     {label:'Ensemble',data:ensM,borderColor:'#00d4ff',borderWidth:2,pointRadius:3,fill:false,tension:.3,spanGaps:true},
     {label:'AR(5)',data:arM,borderColor:'rgba(255,170,0,.6)',borderWidth:1.5,pointRadius:2,borderDash:[3,2],fill:false,tension:.3,spanGaps:true},
+    {label:'Chaos k-NN',data:chaosM,borderColor:'rgba(170,102,255,.6)',borderWidth:1.5,pointRadius:2,borderDash:[3,2],fill:false,tension:.3,spanGaps:true},
     {label:'Actual',data:actData,borderColor:'#00ff88',borderWidth:2,pointRadius:2,fill:false,tension:.2},
   ]},
   options:{responsive:true,maintainAspectRatio:false,
@@ -1942,6 +1944,7 @@ def main():
         "pnl_chart":       pnl_chart,
         "ens":             ens_today,
         "ar_preds":        [round(v, 4) for v in fc["ar"]],
+        "chaos_preds":     [round(v, 4) for v in fc["chaos"]],
         "transition_prob": [[round(float(p), 4) for p in row] for row in trans],
         "last20_dates":    dates[-20:],
         "last20_prices":   [round(float(v), 4) for v in prices[-20:]],
