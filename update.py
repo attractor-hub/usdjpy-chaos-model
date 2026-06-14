@@ -52,9 +52,13 @@ NOTIONAL_YEN = 1_000_000                  # PnL想定元本(円)
 PNL_THRESH   = 0.02   # 予測変化がこの閾値(円)未満なら見送り
 
 # --- UP Probability フィルター ---
-USE_UP_PROB_FILTER = True   # True: UP Prob が中立ゾーンの日は取引スキップ
+USE_UP_PROB_FILTER = False  # True: UP Prob が中立ゾーンの日は取引スキップ
 UP_PROB_THRESH     = 0.60   # 閾値。up_prob > thresh または < (1-thresh) の時のみ取引
 UP_PROB_MIN_N      = 50     # 過去残差の最低必要サンプル数(不足時はフィルター無効)
+
+# --- 連続シグナルスキップフィルター ---
+USE_CONSEC_SKIP = True   # True: N日連続同方向シグナル後はエントリーをスキップ
+CONSEC_SKIP_N   = 4      # 連続カウント閾値(この日数目以降をスキップ)
 
 # --- スワップ(キャリー)モデル ---
 # 理論キャリー = 価格 × (r_USD − r_JPY) / 365 × 暦日数(週末分も自然に加算)
@@ -985,12 +989,25 @@ def pnl_backtest(prices, dates_dt, ens_pred, eval_idxs, r_usd, lag=0,
     pos_prev, recs = 0, []
     pnls, price_pnls, swap_pnls = [], [], []
     trades, hits = 0, []
+    consec_count, last_consec_dir = 0, 0  # 連続シグナル追跡
     for idx in eval_idxs:
         s = idx - lag  # シグナル計算日
         if idx + 1 >= N or s < 0 or np.isnan(ens_pred[0, s]):
             continue
         edge    = ens_pred[0, s] - prices[s]
         pos_raw = 0 if abs(edge) < PNL_THRESH else (1 if edge > 0 else -1)
+        # 連続シグナルスキップフィルター(実価格変化方向をカウント)
+        if s >= 1:
+            actual_dir = 1 if prices[s] > prices[s-1] else (-1 if prices[s] < prices[s-1] else 0)
+        else:
+            actual_dir = 0
+        if actual_dir != 0 and actual_dir == last_consec_dir:
+            consec_count += 1
+        else:
+            consec_count = 1 if actual_dir != 0 else 0
+            last_consec_dir = actual_dir
+        if USE_CONSEC_SKIP and pos_raw != 0 and consec_count >= CONSEC_SKIP_N:
+            pos_raw = 0
         # UP Prob フィルター: 確信度が中立ゾーンの日はスキップ
         if USE_UP_PROB_FILTER and up_prob_map is not None and pos_raw != 0:
             up_p = up_prob_map.get(s, float("nan"))
