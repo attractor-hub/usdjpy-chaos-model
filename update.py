@@ -63,7 +63,7 @@ SWAP_HAIRCUT_PIPS = 0.2    # 業者取り分(pips/日、保有中は常に控除
 # 同一データ・同一評価窓で一括比較し、要因分解する
 PUBLIC_BUILD    = False  # True = upgrade.py経由で外部公開版を生成(Configuration非表示)
 USE_EWMA        = False  # False = v3.0の均等加重に戻す
-USE_MACRO       = False  # False = 金利/VIX特徴量とリスクオフ判定を無効化(v3.0相当)
+USE_MACRO       = True   # True = 金利/VIX特徴量をk-NN埋め込みに追加 + VIXスパイク→Unstable強制
 EWMA_HALFLIFE   = 60    # 重み選択窓の指数減衰半減期(日)。直近誤差ほど重視
 VIX_FALLBACK    = 20.0  # ^VIX取得失敗時のフォールバック(特徴量はゼロ化され無害)
 VIX_SPIKE_Z     = 2.0   # リスクオフ判定: VIX対数zスコア閾値
