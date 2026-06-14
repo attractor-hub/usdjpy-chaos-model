@@ -103,11 +103,11 @@ AR_ORDER      = 5      # AR次数
 # --- v3.3: Hurstベースポジションサイジング ---
 # Hurst高 → トレンド持続性あり → 同方向でサイズ増
 # Hurst低 → 確信度低/平均回帰的 → サイズ縮小（逆張りはしない）
-USE_HURST_SIZING  = True  # True = Hurstスケーリング有効。Falseで従来通り
+USE_HURST_SIZING  = False  # True = Hurstスケーリング有効。Falseで従来通り
 HURST_HIGH        = 0.55   # 以上: サイズ増（トレンド相場）
 HURST_LOW         = 0.45   # 未満: サイズ縮小（低確信度）
 HURST_HIGH_MULT   = 1.5    # トレンド相場のポジション倍率
-HURST_LOW_MULT    = 1   # 低確信度のポジション倍率（マイナス=逆張り）
+HURST_LOW_MULT    = -0.5   # 低確信度のポジション倍率（マイナス=逆張り）
 
 REGIME_NAMES = ["Low Vol Range", "High Vol Range",
                 "Bull Trend", "Bear Trend", "Unstable"]
@@ -118,9 +118,13 @@ REGIME_NAMES = ["Low Vol Range", "High Vol Range",
 def fetch_usdjpy():
     try:
         import yfinance as yf
+        from datetime import date as _date
         df = yf.download("USDJPY=X", period="10y", interval="1d",
                          progress=False, auto_adjust=True)
         df = df.dropna()
+        # 当日の未完成足を除外 → 実行時刻に関わらず常に前日終値を使う
+        today_str = _date.today().strftime("%Y-%m-%d")
+        df = df[df.index.strftime("%Y-%m-%d") < today_str]
         if len(df) < 800:
             raise ValueError("データ不足")
         closes = df["Close"].values.flatten().astype(float)
