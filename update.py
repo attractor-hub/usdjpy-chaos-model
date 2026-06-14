@@ -905,20 +905,41 @@ def compute_up_prob_series(prices, ens_pred, ens_err, eval_idxs,
             past_errs.append(e)
     return up_prob
 
-def coverage_check(ens_err, eval_idxs, holdout=60):
-    """前半残差で分位点を作り、後半60日でカバレッジを実測(分位点の自己評価を回避)"""
+def coverage_check(ens_err, eval_idxs, holdout=60, rv=None):
+    """
+    前半残差で分位点を作り、後半60日でカバレッジを実測(分位点の自己評価を回避)。
+    rv指定時: ボラティリティ正規化を適用。fitでnorm分位点を計算し、
+    testでは各日のrvでスケールした区間に実残差が入るかを判定。
+    """
     out = {}
     for h in range(HORIZONS):
-        es = np.array([ens_err[h, i] for i in eval_idxs if not np.isnan(ens_err[h, i])])
+        valid_idx = [i for i in eval_idxs if not np.isnan(ens_err[h, i])]
+        es = np.array([ens_err[h, i] for i in valid_idx])
         if len(es) < holdout + 60:
             out[f"d{h+1}"] = None
             continue
-        fit, test = es[:-holdout], es[-holdout:]
-        q10, q90 = np.percentile(fit, 10), np.percentile(fit, 90)
-        q25, q75 = np.percentile(fit, 25), np.percentile(fit, 75)
+        if rv is not None:
+            rv_vals = np.array([max(float(rv[i]), 1e-8) for i in valid_idx])
+            es_norm = es / rv_vals
+            fit_norm, test_norm = es_norm[:-holdout], es_norm[-holdout:]
+            rv_test = rv_vals[-holdout:]
+            q10, q90 = np.percentile(fit_norm, 10), np.percentile(fit_norm, 90)
+            q25, q75 = np.percentile(fit_norm, 25), np.percentile(fit_norm, 75)
+            # test日ごとにrv × 分位点で区間を復元して判定
+            lo80, hi80 = q10 * rv_test, q90 * rv_test
+            lo50, hi50 = q25 * rv_test, q75 * rv_test
+            test_raw = es[-holdout:]
+            cov80 = float(np.mean((test_raw >= lo80) & (test_raw <= hi80)))
+            cov50 = float(np.mean((test_raw >= lo50) & (test_raw <= hi50)))
+        else:
+            fit, test = es[:-holdout], es[-holdout:]
+            q10, q90 = np.percentile(fit, 10), np.percentile(fit, 90)
+            q25, q75 = np.percentile(fit, 25), np.percentile(fit, 75)
+            cov80 = float(np.mean((test >= q10) & (test <= q90)))
+            cov50 = float(np.mean((test >= q25) & (test <= q75)))
         out[f"d{h+1}"] = {
-            "cov80": round(float(np.mean((test >= q10) & (test <= q90))), 4),
-            "cov50": round(float(np.mean((test >= q25) & (test <= q75))), 4),
+            "cov80": round(cov80, 4),
+            "cov50": round(cov50, 4),
         }
     return out
 
@@ -1845,7 +1866,7 @@ def main():
 
     # conformal区間とカバレッジ
     cq = conformal_quantiles(ens_err, eval_idxs, rv=rv)
-    coverage = coverage_check(ens_err, eval_idxs)
+    coverage = coverage_check(ens_err, eval_idxs, rv=rv)
 
     # PnL(スワップ込み、ラグ0=本体 + ラグ1=執行感応度テスト)
     from datetime import datetime as _dt
