@@ -95,11 +95,11 @@ AR_ORDER      = 5      # AR次数
 # --- v3.3: Hurstベースポジションサイジング ---
 # Hurst高 → トレンド持続性あり → 同方向でサイズ増
 # Hurst低 → 確信度低/平均回帰的 → サイズ縮小（逆張りはしない）
-USE_HURST_SIZING  = False  # True = Hurstスケーリング有効。Falseで従来通り
+USE_HURST_SIZING  = True  # True = Hurstスケーリング有効。Falseで従来通り
 HURST_HIGH        = 0.55   # 以上: サイズ増（トレンド相場）
 HURST_LOW         = 0.45   # 未満: サイズ縮小（低確信度）
 HURST_HIGH_MULT   = 1.5    # トレンド相場のポジション倍率
-HURST_LOW_MULT    = -0.5   # 低確信度のポジション倍率（マイナス=逆張り）
+HURST_LOW_MULT    = 1   # 低確信度のポジション倍率（マイナス=逆張り）
 
 REGIME_NAMES = ["Low Vol Range", "High Vol Range",
                 "Bull Trend", "Bear Trend", "Unstable"]
@@ -1101,6 +1101,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Consolas','Co
 .r1{background:var(--blue3);color:var(--blue);border-color:var(--blue2)}
 .r2{background:var(--amber3);color:var(--amber);border-color:var(--amber2)}
 .r3{background:var(--red3);color:var(--red);border-color:var(--red2)}
+.skip-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:2px;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:500;border:1px solid;margin-top:6px;margin-left:6px;background:rgba(255,160,0,.12);color:#ffa500;border-color:rgba(255,160,0,.35)}
+.skip-badge.hidden{display:none}
 .r4{background:var(--purple3);color:var(--purple);border-color:var(--purple2)}
 .rdot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 2s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
@@ -1148,7 +1150,10 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
   <div class="hdr-r">
     <div class="hdr-price" id="hprice">&mdash;</div>
     <div id="hdate" style="margin-top:4px;font-size:11px;color:var(--text3)"></div>
-    <div id="rbadge" class="rbadge r0" style="margin-top:6px"><span class="rdot"></span><span id="rlabel"></span></div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0">
+      <div id="rbadge" class="rbadge r0" style="margin-top:6px"><span class="rdot"></span><span id="rlabel"></span></div>
+      <div id="skip-badge" class="skip-badge hidden">⏸ <span id="skip-label"></span></div>
+    </div>
   </div>
 </div>
 
@@ -1311,6 +1316,17 @@ document.getElementById('hdate').textContent=D.last_date+' Close';
 const rb=document.getElementById('rbadge');
 rb.className='rbadge r'+D.current_regime;
 document.getElementById('rlabel').textContent=RN[D.current_regime];
+
+// 連続シグナルスキップバッジ
+const skipBadge=document.getElementById('skip-badge');
+const skipLabel=document.getElementById('skip-label');
+if(D.use_consec_skip && D.consec_count>=D.consec_skip_n){
+  const arrow=D.consec_dir>0?'↑':'↓';
+  skipLabel.textContent=`CONSEC SKIP ${D.consec_count}日${arrow}`;
+  skipBadge.classList.remove('hidden');
+}else{
+  skipBadge.classList.add('hidden');
+}
 
 const ratio=D.oos.ensemble.rmse/D.oos.naive.rmse;
 const mData=[
@@ -1889,10 +1905,27 @@ def main():
     def _clean(d):
         return {k: v for k, v in d.items() if k != "_errs"} if d else None
 
+    # 当日の連続実価格方向カウント
+    _consec_dir, _consec_cnt = 0, 0
+    for _i in range(len(prices) - 1, 0, -1):
+        _d = 1 if prices[_i] > prices[_i-1] else (-1 if prices[_i] < prices[_i-1] else 0)
+        if _d == 0:
+            break
+        if _consec_dir == 0:
+            _consec_dir = _d
+        if _d == _consec_dir:
+            _consec_cnt += 1
+        else:
+            break
+
     payload = {
         "last_price":      round(last, 4),
         "last_date":       dates[-1],
         "current_regime":  cur_r,
+        "consec_count":    _consec_cnt,
+        "consec_dir":      _consec_dir,
+        "consec_skip_n":   CONSEC_SKIP_N,
+        "use_consec_skip": USE_CONSEC_SKIP,
         "current_vol":     round(float(rv[-1]), 6),
         "current_hurst":   round(float(hurst[-1]), 4),
         "current_adx":     round(float(adx[-1]), 2),
