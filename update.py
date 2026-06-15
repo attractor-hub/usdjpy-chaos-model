@@ -1387,7 +1387,7 @@ const RN=__REGIME_NAMES__;
 const RC=['#3ddc84','#4a9eff','#f0a830','#ff6b6b','#a070ff'];
 
 document.getElementById('hprice').textContent='¥'+D.last_price.toFixed(2);
-document.getElementById('hdate').textContent=D.last_date+' Close';
+document.getElementById('hdate').textContent=D.last_date+(D.realtime_mode?' LIVE':' Close');
 const rb=document.getElementById('rbadge');
 rb.className='rbadge r'+D.current_regime;
 document.getElementById('rlabel').textContent=RN[D.current_regime];
@@ -1872,7 +1872,31 @@ def main():
     print("=== USD/JPY Ensemble v3 (causal / walk-forward) ===")
     print("Time:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
+    realtime_mode = "--realtime" in __import__("sys").argv
     dates, prices, source = fetch_usdjpy()
+
+    # リアルタイムモード: 現在価格を今日の仮終値として末尾に追加
+    if realtime_mode:
+        try:
+            import yfinance as yf
+            from datetime import date as _date
+            df_rt = yf.download("USDJPY=X", period="1d", interval="1m",
+                                progress=False, auto_adjust=True)
+            df_rt = df_rt.dropna()
+            if len(df_rt) > 0:
+                rt_price = float(df_rt["Close"].iloc[-1])
+                today = _date.today().strftime("%Y/%m/%d")
+                if dates[-1] != today:
+                    dates = dates + [today]
+                    prices = np.append(prices, rt_price)
+                    print(f"[REALTIME] 現在価格 {rt_price:.3f} を {today} として追加")
+                else:
+                    prices = np.append(prices[:-1], rt_price)
+                    print(f"[REALTIME] 現在価格 {rt_price:.3f} で本日データを更新")
+        except Exception as e:
+            print(f"[WARN] リアルタイム価格取得失敗: {e}")
+            realtime_mode = False
+
     N = len(prices)
 
     # 外部マクロ系列(金利・VIX)。失敗時フォールバックで自動更新は止まらない
@@ -2108,6 +2132,7 @@ def main():
     payload = {
         "last_price":      round(last, 4),
         "last_date":       dates[-1],
+        "realtime_mode":   realtime_mode,
         "current_regime":  cur_r,
         "consec_count":    _consec_cnt,
         "consec_dir":      _consec_dir,
